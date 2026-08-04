@@ -1,0 +1,116 @@
+{
+  "commands": {
+    "boshlash": "Botni ishga tushirish",
+    "guruh_ulash": "Guruhni ulash",
+    "statistika": "Statistikani ko'rish"
+  },
+  "common": {
+    "back": "Orqaga",
+    "cancel": "Bekor qilish",
+    "confirm": "Tasdiqlash",
+    "yes": "Ha",
+    "no": "Yo'q",
+    "done": "Tayyor",
+    "skip": "O'tkazib yuborish",
+    "delete": "O'chirish",
+    "edit": "Tahrirlash",
+    "save": "Saqlash",
+    "error": "Xatolik yuz berdi. Iltimos, qayta urinib ko'ring.",
+    "access_denied": "Bu amalni bajarishga ruxsatingiz yo'q.",
+    "not_found": "Ma'lumot topilmadi yoki u endi mavjud emas."
+  },
+  "menu": {
+    "announcements": "E'lonlarim",
+    "templates": "Shablonlar",
+    "groups": "Guruhlar"
+  },
+  "start": {
+    "welcome": "Salom! Men e'lonlaringizni tanlangan Telegram guruhlariga belgilangan vaqt oralig'ida avtomatik yuborishga yordam beraman.\n\nE'lon yarating, guruhlarni ulang, jadvalni belgilang va yuborishni boshqaring.",
+    "choose_section": "Kerakli bo'limni tanlang."
+  },
+  "announcements": {
+    "title": "E'lonlarim",
+    "create": "E'lon yaratish",
+    "from_template": "Shablondan tanlash",
+    "new_text": "Yangi matn kiritish",
+    "photo_message": "Rasmli e'lon yuborish",
+    "active": "Faol",
+    "paused": "To'xtatilgan",
+    "stop": "To'xtatish",
+    "start": "Ishga tushirish",
+    "immediate": "Hozir yuborish",
+    "scheduled": "Jadval bo'yicha boshlash",
+    "empty": "Sizda hali e'lonlar yo'q.",
+    "send_ready_photo": "Matn va rasmli e'lon yubormoqchi bo'lsangiz, boshqa chatdagi tayyor xabarni matni va fotosi bilan birga shu yerga yuboring.",
+    "photo_without_caption": "Rasm qabul qilindi. Endi e'lon matnini yuboring."
+    ,"send_text": "E'lon matnini yuboring."
+    ,"send_contact": "Bog'lanish uchun telefon raqami yoki Telegram akkauntini yuboring."
+    ,"send_name": "Murojaat uchun ismni yuboring yoki O'tkazib yuborish tugmasini bosing."
+    ,"select_groups": "E'lon yuboriladigan guruhlarni tanlang."
+    ,"select_interval": "Yuborish oralig'ini tanlang."
+    ,"save_template": "Bu e'lonni shablon sifatida saqlaysizmi?"
+    ,"select_first_run": "Birinchi yuborish vaqtini tanlang."
+    ,"created": "E'lon yaratildi va ishga tushirildi."
+    ,"deleted": "E'lon o'chirildi."
+    ,"delete_confirm": "Bu e'lonni o'chirmoqchimisiz?"
+    ,"edit_menu": "O'zgartiriladigan bo'limni tanlang."
+    ,"edit_text": "Matnni o'zgartirish"
+    ,"edit_contact": "Kontaktni o'zgartirish"
+    ,"edit_name": "Ismni o'zgartirish"
+    ,"edit_groups": "Guruhlarni o'zgartirish"
+    ,"edit_interval": "Oraliqni o'zgartirish"
+    ,"no_groups": "Avval kamida bitta guruhni ulang."
+    ,"details": "E'lon: {text}\nHolat: {status}\nOraliq: {interval} daqiqa\nGuruhlar: {groups}"
+  },
+  "templates": {
+    "title": "Shablonlar",
+    "create": "Shablon yaratish",
+    "text": "Matn kiritish",
+    "photo_message": "Rasmli xabar yuborish",
+    "empty": "Sizda hali shablonlar yo'q.",
+    "photo_mark": "📷",
+    "send_text": "Shablon uchun matnni yuboring.",
+    "send_photo": "Rasmli shablon yubormoqchi bo'lsangiz, rasmga matn yozib yuboring yoki boshqa chatdagi tayyor xabarni rasm va matni bilan birga shu yerga yuboring.",
+    "photo_required": "Iltimos, rasmni yuboring.",
+    "send_caption": "Rasm qabul qilindi. Endi shablon matnini yuboring.",
+    "created": "Shablon saqlandi.",
+    "updated": "Shablon yangilandi.",
+    "photo_removed": "Shablondagi rasm o'chirildi.",
+    "deleted": "Shablon o'chirildi.",
+    "delete_confirm": "Bu shablonni o'chirmoqchimisiz?",
+    "details": "Shablon matni:\n{text}",
+    "edit_text": "Matnni o'zgartirish",
+    "replace_photo": "Rasmni almashtirish",
+    "remove_photo": "Rasmni o'chirish"
+  },
+  "groups": {
+    "title": "Guruhlar",
+    "add": "Guruh qo'shish",
+    "connected": "Ulangan",
+    "unavailable": "Mavjud emas",
+    "details": "Guruh: {title}\nHolat: {status}\nChat ID: {chat_id}",
+    "empty": "Sizda hali ulangan guruhlar yo'q.",
+    "connect_instruction": "Botni kerakli guruhga qo'shing, unga xabar yuborish huquqini bering va guruhda /guruh_ulash buyrug'ini yuboring.",
+    "connection_success": "Guruh muvaffaqiyatli ulandi.",
+    "disconnect_confirm": "Bu guruhni ro'yxatingizdan o'chirmoqchimisiz? U sizning e'lonlaringizdan ham chiqariladi.",
+    "disconnected": "Guruh ro'yxatingizdan o'chirildi.",
+    "bot_not_member": "Bot bu guruhga qo'shilmagan.",
+    "bot_cannot_post": "Botda ushbu guruhga xabar yuborish huquqi yo'q.",
+    "user_not_admin": "Guruhni ulash uchun siz guruh administratori bo'lishingiz kerak."
+  },
+  "validation": {
+    "contact_required": "Telefon raqami yoki Telegram akkauntingizni kiriting.",
+    "group_required": "Kamida bitta guruhni tanlang.",
+    "limit_reached": "Ruxsat etilgan limitga yetdingiz."
+  },
+  "delivery": {
+    "rate_limited": "Telegram limiti sabab yuborish keyinroq davom ettiriladi.",
+    "group_access_lost": "Guruhga yuborish to'xtatildi: botda kerakli huquq yo'q yoki bot guruhdan chiqarilgan.",
+    "photo_unavailable": "Rasm endi mavjud emas. Iltimos, e'lon yoki shablondagi rasmni yangilang.",
+    "database_unavailable": "Vaqtinchalik texnik xatolik yuz berdi. Keyinroq qayta urinib ko'ring."
+  },
+  "statistics": {
+    "title": "Statistika",
+    "report": "{title}\n\nFoydalanuvchilar: {users}\nGuruhlar: {groups}\nFaol e'lonlar: {active}\nTo'xtatilgan e'lonlar: {paused}\nMuvaffaqiyatli yuborishlar: {sent}\nXatoliklar: {failed}"
+  }
+}
