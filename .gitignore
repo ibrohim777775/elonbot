@@ -25,3 +25,5 @@ Thumbs.db
 *.sqlite3
 *.db
 logs/
+node_modules/
+dist/

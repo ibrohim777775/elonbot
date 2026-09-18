@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from elonbot.database.enums import AnnouncementStatus, FirstRunMode
-from elonbot.database.models import Announcement, AnnouncementGroup
+from elonbot.database.models import Announcement, AnnouncementGroup, DeliveryLog, TelegramGroup
 
 
 async def list_announcements(session: AsyncSession, user_id: int) -> list[Announcement]:
@@ -27,7 +27,11 @@ async def get_announcement(
 ) -> Announcement | None:
     result = await session.execute(
         select(Announcement)
-        .where(Announcement.id == announcement_id, Announcement.user_id == user_id)
+        .where(
+            Announcement.id == announcement_id,
+            Announcement.user_id == user_id,
+            Announcement.status != AnnouncementStatus.DELETED,
+        )
         .options(selectinload(Announcement.group_links))
     )
     return result.scalar_one_or_none()
@@ -39,6 +43,7 @@ async def create_announcement(
     user_id: int,
     text: str,
     photo_file_id: str | None,
+    photo_file_ids: list[str] | None,
     contact_phone: str | None,
     contact_telegram: str | None,
     contact_name: str | None,
@@ -51,6 +56,7 @@ async def create_announcement(
         user_id=user_id,
         text=text,
         photo_file_id=photo_file_id,
+        photo_file_ids=photo_file_ids,
         contact_phone=contact_phone,
         contact_telegram=contact_telegram,
         contact_name=contact_name,
@@ -87,6 +93,22 @@ async def delete_announcement(session: AsyncSession, *, user_id: int, announceme
         delete(Announcement).where(Announcement.id == announcement_id, Announcement.user_id == user_id)
     )
     return result.rowcount == 1
+
+
+async def list_delivery_message_ids(
+    session: AsyncSession, *, user_id: int, announcement_id: int
+) -> list[tuple[int, list[int]]]:
+    """Return sent Telegram message IDs only for an announcement owned by the user."""
+    rows = await session.execute(
+        select(DeliveryLog.telegram_message_id, DeliveryLog.telegram_message_ids, TelegramGroup.chat_id)
+        .join(Announcement, Announcement.id == DeliveryLog.announcement_id)
+        .join(TelegramGroup, TelegramGroup.id == DeliveryLog.group_id)
+        .where(Announcement.id == announcement_id, Announcement.user_id == user_id)
+    )
+    result: list[tuple[int, list[int]]] = []
+    for message_id, message_ids, chat_id in rows:
+        result.append((chat_id, list(message_ids or ([message_id] if message_id else []))))
+    return result
 
 
 async def update_announcement(

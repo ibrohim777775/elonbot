@@ -1,6 +1,7 @@
 """FastAPI webhook application and Telegram bot lifecycle."""
 
 from contextlib import asynccontextmanager
+from secrets import compare_digest
 
 from aiogram import Bot
 from aiogram.types import Update
@@ -51,10 +52,10 @@ def create_app() -> FastAPI:
     @application.post("/webhook/{secret}", include_in_schema=False)
     async def telegram_webhook(secret: str, request: Request) -> JSONResponse:
         """Validate and dispatch one Telegram Bot API webhook update."""
-        if secret != request.app.state.webhook_secret:
+        if not compare_digest(secret, request.app.state.webhook_secret):
             raise HTTPException(status_code=403)
         header_secret = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
-        if header_secret != request.app.state.webhook_secret:
+        if header_secret is None or not compare_digest(header_secret, request.app.state.webhook_secret):
             raise HTTPException(status_code=403)
         update = Update.model_validate(await request.json(), context={"bot": request.app.state.bot})
         await request.app.state.dispatcher.feed_update(request.app.state.bot, update)

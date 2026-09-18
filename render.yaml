@@ -1,12 +1,22 @@
 services:
   - type: web
     name: elonbot
-    runtime: python
-    buildCommand: pip install .
-    startCommand: uvicorn elonbot.main:app --host 0.0.0.0 --port $PORT
+    runtime: node
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: npm run start:prod
     healthCheckPath: /health
     envVars:
       - key: BOT_TOKEN
+        sync: false
+      - key: NODE_VERSION
+        value: 24.12.0
+      - key: APP_ENV
+        value: production
+      - key: TELEGRAM_API_ID
+        sync: false
+      - key: TELEGRAM_API_HASH
+        sync: false
+      - key: SESSION_ENCRYPTION_KEY
         sync: false
       - key: DATABASE_URL
         sync: false
@@ -14,3 +24,5 @@ services:
         sync: false
       - key: WEBHOOK_SECRET
         generateValue: true
+      - key: ADMIN_IDS
+        sync: false

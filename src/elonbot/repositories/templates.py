@@ -25,10 +25,20 @@ async def get_template(session: AsyncSession, *, user_id: int, template_id: int)
 
 
 async def create_template(
-    session: AsyncSession, *, user_id: int, text: str, photo_file_id: str | None = None
+    session: AsyncSession,
+    *,
+    user_id: int,
+    text: str,
+    photo_file_id: str | None = None,
+    photo_file_ids: list[str] | None = None,
 ) -> Template:
-    """Create a text or one-photo template."""
-    template = Template(user_id=user_id, text=text, photo_file_id=photo_file_id)
+    """Create a text or photo template."""
+    template = Template(
+        user_id=user_id,
+        text=text,
+        photo_file_id=photo_file_id,
+        photo_file_ids=photo_file_ids,
+    )
     session.add(template)
     await session.flush()
     return template

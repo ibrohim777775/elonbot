@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="uz">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <title>Elonbot — Guruh qo'shish</title>
+  <link rel="stylesheet" href="/app-assets/app.css">
+  <link rel="stylesheet" href="/app-assets/help.css">
+  <script src="https://telegram.org/js/telegram-web-app.js" defer></script>
+  <script src="/app-assets/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar"><span class="brand"><span class="brand-mark">e</span>elonbot<span class="brand-dot">.</span></span><span class="connection">Guruh qo'shish</span></header>
+  <nav class="app-nav" aria-label="Menyu"><a href="/app" data-view="groups" aria-current="page">Guruhlar</a><a href="/help?lang=uz" data-view="help">Qo'llanma</a></nav>
+  <main id="screen" aria-live="polite"><div class="empty"><span class="loader" aria-hidden="true"></span><h1>Yuklanmoqda…</h1><p>Guruhlaringiz tayyorlanmoqda.</p></div></main>
+  <main id="help-screen" class="guide" tabindex="-1" hidden aria-live="polite"></main>
+  <footer id="footer" class="footer" hidden><span id="connected-count"></span><button type="button" class="primary" data-action="close">Botga qaytish</button></footer>
+  <div id="toast" class="toast" role="status" hidden><span></span><button type="button" aria-label="Yopish">×</button></div>
+  <noscript>Ilovani ishlatish uchun JavaScript yoqilgan bo'lishi kerak.</noscript>
+</body>
+</html>

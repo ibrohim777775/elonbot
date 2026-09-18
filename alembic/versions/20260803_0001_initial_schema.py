@@ -9,6 +9,7 @@ from collections.abc import Sequence
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 
 revision: str = "20260803_0001"
@@ -17,10 +18,12 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-chat_type = sa.Enum("group", "supergroup", "channel", name="chat_type")
-announcement_status = sa.Enum("active", "paused", "deleted", name="announcement_status")
-first_run_mode = sa.Enum("immediate", "scheduled", name="first_run_mode")
-delivery_status = sa.Enum("sent", "failed", "rate_limited", "skipped", name="delivery_status")
+# These types are created explicitly in ``upgrade`` below.  Disabling the
+# table-level creation avoids attempting to create each enum a second time.
+chat_type = postgresql.ENUM("group", "supergroup", "channel", name="chat_type", create_type=False)
+announcement_status = postgresql.ENUM("active", "paused", "deleted", name="announcement_status", create_type=False)
+first_run_mode = postgresql.ENUM("immediate", "scheduled", name="first_run_mode", create_type=False)
+delivery_status = postgresql.ENUM("sent", "failed", "rate_limited", "skipped", name="delivery_status", create_type=False)
 
 
 def upgrade() -> None:

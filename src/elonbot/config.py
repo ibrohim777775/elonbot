@@ -9,12 +9,16 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     """Validated runtime settings."""
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
+    # ``ADMIN_IDS`` is deliberately a comma-separated string (see .env.example),
+    # so let the validator below parse it instead of trying JSON decoding first.
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", extra="ignore", enable_decoding=False
+    )
 
     bot_token: SecretStr = Field(alias="BOT_TOKEN")
     database_url: PostgresDsn = Field(alias="DATABASE_URL")
-    webhook_base_url: str = Field(alias="WEBHOOK_BASE_URL")
-    webhook_secret: SecretStr = Field(alias="WEBHOOK_SECRET")
+    webhook_base_url: str = Field(alias="WEBHOOK_BASE_URL", min_length=1)
+    webhook_secret: SecretStr = Field(alias="WEBHOOK_SECRET", min_length=1)
     admin_ids: tuple[int, ...] = Field(default=(), alias="ADMIN_IDS")
 
     max_messages_per_minute: int = Field(default=20, ge=1, alias="MAX_MESSAGES_PER_MINUTE")

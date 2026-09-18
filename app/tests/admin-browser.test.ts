@@ -1,0 +1,54 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { once } from "node:events";
+import { Admin } from "../admin";
+import { Accounts } from "../accounts";
+import { createHttpServer } from "../server";
+import { config, seed, testDatabase } from "./helpers";
+import { signedInitData } from "./miniapp-fixtures";
+
+test("browser login is single-use, expiring, hashed, allowlisted, cookie-based and CSRF protected; logout revokes it", async () => {
+  const { pg, database } = await testDatabase(); const local = { ...config, adminIds: [...config.adminIds] };
+  const admin = new Admin(local, database, {} as any, {} as any);
+  const accounts = new Accounts(local, { async execute() { throw new Error("No Telegram"); } });
+  const server = createHttpServer(local, database, accounts, async () => {}, () => true, undefined, admin);
+  try {
+    await seed(database); server.listen(0, "127.0.0.1"); await once(server, "listening");
+    const url = `http://127.0.0.1:${(server.address() as any).port}`;
+    const post = (path: string, payload: any, headers: Record<string, string> = {}) => fetch(url + path, { method: "POST", headers: { "Content-Type": "application/json", Origin: config.baseUrl, "X-Admin-Request": "1", ...headers }, body: JSON.stringify(payload) });
+    const linkResponse = await post("/admin-api/browser-link", {}, { Authorization: `tma ${signedInitData()}` });
+    assert.equal(linkResponse.status, 200); const link = await linkResponse.json() as any;
+    assert.equal(link.expiresIn, 300); const token = new URL(link.url).hash.slice(7);
+    assert.equal((await post("/admin-api/browser-link", {}, { Authorization: `tma ${signedInitData(202)}` })).status, 403);
+    assert.equal((await post("/admin-api/session", { token }, { Origin: "https://evil.test" })).status, 403);
+    assert.equal((await post("/admin-api/session", { token }, { "X-Admin-Request": "" })).status, 403);
+    const exchange = await post("/admin-api/session", { token }); assert.equal(exchange.status, 200);
+    const cookie = exchange.headers.get("set-cookie")!;
+    assert.match(cookie, /__Host-elonbot_admin=/); assert.match(cookie, /HttpOnly/); assert.match(cookie, /SameSite=Strict/); assert.match(cookie, /Secure/);
+    assert.equal((await post("/admin-api/session", { token })).status, 401);
+    const cookies = { Cookie: cookie.split(";")[0] };
+    assert.equal((await fetch(url + "/admin-api/overview", { headers: cookies })).status, 200);
+    const rows = (await database.query("SELECT * FROM admin_browser_tokens")).rows;
+    assert.ok(!JSON.stringify(rows).includes(token)); assert.ok(!JSON.stringify(rows).includes(cookie.split(";")[0].split("=")[1]));
+    assert.equal((await post("/admin-api/broadcasts", { textRu: "RU", textUz: "UZ", audience: "all", userIds: [], requestId: "12345678-1234-1234-1234-123456789012" }, { ...cookies, Origin: "" })).status, 403);
+    const created = await post("/admin-api/broadcasts", { textRu: "RU", textUz: "UZ", audience: "all", userIds: [], requestId: "12345678-1234-1234-1234-123456789012" }, cookies);
+    assert.equal(created.status, 200);
+    local.adminIds = [];
+    assert.equal((await fetch(url + "/admin-api/overview", { headers: cookies })).status, 403);
+    local.adminIds = ["101"];
+    assert.equal((await post("/admin-api/logout", {}, cookies)).status, 200);
+    assert.equal((await fetch(url + "/admin-api/overview", { headers: cookies })).status, 401);
+    const expired = await admin.browser.link({ id: 101, first_name: "Admin" });
+    await database.query("UPDATE admin_browser_tokens SET expires_at=now()-interval '1 second'");
+    assert.equal((await post("/admin-api/session", { token: new URL(expired.url).hash.slice(7) })).status, 401);
+    const fresh = await admin.browser.link({ id: 101, first_name: "Admin" });
+    const results = await Promise.all([post("/admin-api/session", { token: new URL(fresh.url).hash.slice(7) }), post("/admin-api/session", { token: new URL(fresh.url).hash.slice(7) })]);
+    assert.deepEqual(results.map(r => r.status).sort(), [200, 401]);
+    const currentCookie = results.find(r => r.status === 200)!.headers.get("set-cookie")!.split(";")[0];
+    await database.query("UPDATE admin_browser_tokens SET expires_at=now()-interval '1 second'");
+    assert.equal((await fetch(url + "/admin-api/overview", { headers: { Cookie: currentCookie } })).status, 401);
+    let limited;
+    for (let attempt = 0; attempt < 31; attempt++) limited = await post("/admin-api/session", { token: "invalid" });
+    assert.equal(limited!.status, 429);
+  } finally { server.closeAllConnections(); await new Promise<void>(resolve => server.close(() => resolve())); await pg.close(); }
+});

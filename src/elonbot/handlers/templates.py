@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from aiogram import F, Router
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.filters import StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from elonbot.bot.keyboards import (
@@ -30,6 +31,7 @@ from elonbot.services.users import register_activity
 
 router = Router(name="templates")
 MAX_PHOTO_CAPTION_LENGTH = 1024
+MAX_TEMPLATE_PHOTOS = 4
 
 
 def _template_rows(templates: list) -> list[tuple[int, str, bool]]:
@@ -93,17 +95,30 @@ async def templates_list(callback: CallbackQuery, session: AsyncSession) -> None
     user_id = await _current_user_id(session, callback.from_user.id)
     templates = await list_templates(session, user_id) if user_id else []
     text = translate("templates.title") if templates else translate("templates.empty")
-    await callback.message.answer(text, reply_markup=templates_keyboard(_template_rows(templates)))
+    keyboard = templates_keyboard(_template_rows(templates))
+    if callback.message.text is None:
+        # Template cards with photos cannot be converted to a text message by edit_text.
+        try:
+            await callback.message.delete()
+        except TelegramBadRequest:
+            pass
+        await callback.message.answer(text, reply_markup=keyboard)
+    else:
+        try:
+            await callback.message.edit_text(text, reply_markup=keyboard)
+        except TelegramBadRequest as error:
+            if "message is not modified" not in str(error).lower():
+                raise
     await callback.answer()
 
 
 @router.callback_query(F.data == "templates:create")
-async def template_create_menu(callback: CallbackQuery) -> None:
-    """Offer text or photo template creation."""
+async def template_create_menu(callback: CallbackQuery, state: FSMContext) -> None:
+    """Start template creation with the same content flow as announcements."""
+    await state.clear()
+    await state.set_state(TemplateStates.creating_text)
     if callback.message is not None:
-        await callback.message.edit_text(
-            translate("templates.create"), reply_markup=template_creation_keyboard()
-        )
+        await callback.message.edit_text(translate("announcements.create_instruction"))
     await callback.answer()
 
 
@@ -138,24 +153,35 @@ async def receive_text_template(message: Message, state: FSMContext, session: As
     await message.answer(translate("templates.created"))
 
 
-@router.message(TemplateStates.creating_photo, F.chat.type == "private", F.photo)
+@router.message(
+    F.chat.type == "private",
+    F.photo,
+    StateFilter(TemplateStates.creating_text, TemplateStates.creating_photo),
+)
 async def receive_photo_template(message: Message, state: FSMContext, session: AsyncSession) -> None:
-    """Persist a photo template or request a caption when it is absent."""
+    """Collect up to four template photos, as for an announcement."""
     if message.from_user is None or not message.photo:
         return
-    photo_file_id = message.photo[-1].file_id
-    if message.caption:
-        user_id = await _current_user_id(session, message.from_user.id)
-        if user_id is None:
-            return
-        await create_template(session, user_id=user_id, text=message.caption, photo_file_id=photo_file_id)
-        await state.clear()
-        await message.answer(translate("templates.created"))
+    data = await state.get_data()
+    photo_file_ids = list(data.get("photo_file_ids") or [])
+    if len(photo_file_ids) >= MAX_TEMPLATE_PHOTOS:
+        await message.answer(translate("announcements.photo_limit"))
         return
-
-    await state.update_data(photo_file_id=photo_file_id)
-    await state.set_state(TemplateStates.creating_photo_caption)
-    await message.answer(translate("templates.send_caption"))
+    photo_file_ids.append(message.photo[-1].file_id)
+    if message.caption and not data.get("text"):
+        await state.update_data(text=message.caption)
+    await state.update_data(photo_file_ids=photo_file_ids, photo_file_id=photo_file_ids[0])
+    if not (await state.get_data()).get("text"):
+        await state.set_state(TemplateStates.creating_photo_caption)
+        await message.answer(translate("templates.send_caption"))
+        return
+    await state.set_state(TemplateStates.creating_photo)
+    await message.answer(
+        translate("announcements.photos_continue"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=translate("common.done"), callback_data="templates:photos_done")
+        ]]),
+    )
 
 
 @router.message(TemplateStates.creating_photo, F.chat.type == "private")
@@ -172,13 +198,41 @@ async def receive_photo_template_caption(
     if message.from_user is None or not message.text:
         return
     user_id = await _current_user_id(session, message.from_user.id)
-    photo_file_id = (await state.get_data()).get("photo_file_id")
-    if user_id is None or not isinstance(photo_file_id, str):
+    data = await state.get_data()
+    photo_file_ids = list(data.get("photo_file_ids") or [])
+    if user_id is None or not photo_file_ids:
         await state.clear()
         return
-    await create_template(session, user_id=user_id, text=message.text, photo_file_id=photo_file_id)
+    await state.update_data(text=message.text)
+    await state.set_state(TemplateStates.creating_photo)
+    await message.answer(
+        translate("announcements.photos_continue"),
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=[[
+            InlineKeyboardButton(text=translate("common.done"), callback_data="templates:photos_done")
+        ]]),
+    )
+
+
+@router.callback_query(TemplateStates.creating_photo, F.data == "templates:photos_done")
+async def finish_template_photos(callback: CallbackQuery, state: FSMContext, session: AsyncSession) -> None:
+    if callback.from_user is None or callback.message is None:
+        return
+    data = await state.get_data()
+    photo_file_ids = list(data.get("photo_file_ids") or [])
+    user_id = await _current_user_id(session, callback.from_user.id)
+    if user_id is None or not photo_file_ids or not data.get("text"):
+        await callback.answer(translate("common.error"), show_alert=True)
+        return
+    await create_template(
+        session,
+        user_id=user_id,
+        text=data["text"],
+        photo_file_id=photo_file_ids[0],
+        photo_file_ids=photo_file_ids,
+    )
     await state.clear()
-    await message.answer(translate("templates.created"))
+    await callback.message.answer(translate("templates.created"))
+    await callback.answer()
 
 
 @router.callback_query(F.data.startswith("templates:show:"))

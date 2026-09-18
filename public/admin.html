@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="light"><title>Elonbot · Админка</title>
+  <link rel="stylesheet" href="/admin-assets/admin.css">
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <script src="/admin-assets/admin-broadcasts.js" defer></script>
+  <script src="/admin-assets/admin.js" defer></script>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <a class="brand" href="#view=overview"><span class="brand-mark">e</span><span>elonbot<small>Панель управления</small></span></a>
+      <nav aria-label="Разделы админки"><a href="#view=overview" data-nav="overview">Обзор</a><a href="#view=users" data-nav="users">Пользователи</a><a href="#view=inbox" data-nav="inbox">Обращения <span id="unread"></span></a><a href="#view=broadcasts" data-nav="broadcasts">Рассылки</a></nav>
+      <p class="aside-note">Время в Ташкенте<br>UTC +5</p>
+    </aside>
+    <main>
+      <header><div><p class="eyebrow">УПРАВЛЕНИЕ СЕРВИСОМ</p><h1 id="heading">Обзор</h1></div><div class="header-actions"><button id="browser-open" class="secondary" type="button" hidden>Открыть в браузере</button><button id="refresh" class="secondary" type="button">Обновить</button><button id="logout" class="secondary" type="button" hidden>Выйти</button></div></header>
+      <div id="notice" role="status" hidden></div>
+      <div id="content" aria-busy="true"><p class="empty">Проверяем доступ…</p></div>
+    </main>
+  </div>
+  <dialog id="tariff-dialog" aria-labelledby="dialog-title">
+    <form id="tariff-form">
+      <p class="eyebrow">УПРАВЛЕНИЕ ДОСТУПОМ</p><h2 id="dialog-title">Включить тариф</h2>
+      <p id="dialog-description"></p>
+      <label for="tariff-note">Примечание к активации</label><textarea id="tariff-note" maxlength="500" rows="3" placeholder="Например: оплата подтверждена"></textarea>
+      <p id="dialog-error" role="alert" hidden></p>
+      <div class="actions"><button type="button" id="dialog-cancel" class="secondary">Отмена</button><button id="dialog-submit" type="submit">Подтвердить</button></div>
+    </form>
+  </dialog>
+</body>
+</html>

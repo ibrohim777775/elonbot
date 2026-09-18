@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from aiogram import Bot, F, Router
+from aiogram.exceptions import TelegramBadRequest, TelegramForbiddenError, TelegramRetryAfter
 from aiogram.filters import Command, StateFilter
-from aiogram.types import CallbackQuery, ChatMemberUpdated, Message
+from aiogram.types import CallbackQuery, ChatMemberUpdated, InlineKeyboardButton, InlineKeyboardMarkup, Message
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from elonbot.bot.keyboards import (
@@ -16,14 +17,19 @@ from elonbot.locales.translator import translate
 from elonbot.repositories.groups import (
     disconnect_group,
     get_user_group,
+    list_available_groups_for_user,
+    list_announcements_orphaned_by_group_disconnect,
     list_user_groups,
     observe_group_access,
 )
+from elonbot.repositories.announcements import list_delivery_message_ids
 from elonbot.repositories.users import get_user_by_telegram_id
 from elonbot.database.enums import ChatType
 from elonbot.services.groups import (
     GroupConnectionResult,
     can_bot_post,
+    connect_known_group_for_user,
+    discover_known_groups_for_user,
     verify_and_connect_group,
 )
 from elonbot.services.users import register_activity
@@ -63,18 +69,74 @@ async def show_groups(message: Message, session: AsyncSession) -> None:
 
 
 @router.message(StateFilter(None), F.chat.type == "private", F.text == translate("menu.groups"))
-async def groups_menu(message: Message, session: AsyncSession) -> None:
+async def groups_menu(message: Message, session: AsyncSession, bot: Bot) -> None:
     """Open the current user's connected groups list."""
     if message.from_user is not None:
-        await register_activity(session, message.from_user)
+        user = await register_activity(session, message.from_user)
+        await discover_known_groups_for_user(bot=bot, session=session, user=user)
     await show_groups(message, session)
 
 
 @router.callback_query(F.data == "groups:add")
-async def add_group(callback: CallbackQuery) -> None:
-    """Explain the verified group connection flow."""
-    if callback.message is not None:
+async def add_group(callback: CallbackQuery, session: AsyncSession, bot: Bot) -> None:
+    """Offer already known groups, then explain how to add a new one."""
+    if callback.message is None or callback.from_user is None:
+        return
+    # Membership checks can require several Telegram API requests.
+    await callback.answer()
+    user = await get_user_by_telegram_id(session, callback.from_user.id)
+    available_groups = await list_available_groups_for_user(session, user.id) if user else []
+    eligible_groups = []
+    for group in available_groups:
+        try:
+            member = await bot.get_chat_member(chat_id=group.chat_id, user_id=callback.from_user.id)
+        except (TelegramBadRequest, TelegramForbiddenError):
+            continue
+        if str(member.status) not in {"left", "kicked", "banned"}:
+            eligible_groups.append(group)
+    if eligible_groups:
+        keyboard = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text=group.title, callback_data=f"groups:connect_known:{group.id}")]
+            for group in eligible_groups
+        ])
+        try:
+            await callback.message.edit_text(translate("groups.select_known"), reply_markup=keyboard)
+        except TelegramBadRequest as error:
+            if "message is not modified" not in str(error).lower():
+                raise
+    else:
         await callback.message.answer(translate("groups.connect_instruction"))
+
+
+@router.callback_query(F.data.startswith("groups:connect_known:"))
+async def connect_known_group(callback: CallbackQuery, session: AsyncSession, bot: Bot) -> None:
+    """Connect the callback user to one of the bot's already known groups."""
+    if callback.from_user is None or callback.message is None:
+        return
+    try:
+        group_id = int((callback.data or "").rsplit(":", 1)[1])
+    except (IndexError, ValueError):
+        await callback.answer(translate("common.not_found"), show_alert=True)
+        return
+    user = await get_user_by_telegram_id(session, callback.from_user.id)
+    if user is None:
+        await callback.answer(translate("common.not_found"), show_alert=True)
+        return
+    outcome = await connect_known_group_for_user(
+        bot=bot,
+        session=session,
+        user=user,
+        group_id=group_id,
+        connector_telegram_id=callback.from_user.id,
+    )
+    messages = {
+        GroupConnectionResult.CONNECTED: "groups.connection_success",
+        GroupConnectionResult.USER_NOT_MEMBER: "groups.user_not_member",
+        GroupConnectionResult.USER_NOT_ADMIN: "groups.user_not_admin",
+        GroupConnectionResult.BOT_CANNOT_POST: "groups.bot_cannot_post",
+        GroupConnectionResult.LIMIT_REACHED: "validation.limit_reached",
+    }
+    await callback.message.edit_text(translate(messages[outcome.result]))
     await callback.answer()
 
 
@@ -94,11 +156,16 @@ async def connect_group_command(message: Message, bot: Bot, session: AsyncSessio
     )
     messages = {
         GroupConnectionResult.CONNECTED: "groups.connection_success",
+        GroupConnectionResult.USER_NOT_MEMBER: "groups.user_not_member",
         GroupConnectionResult.USER_NOT_ADMIN: "groups.user_not_admin",
         GroupConnectionResult.BOT_CANNOT_POST: "groups.bot_cannot_post",
         GroupConnectionResult.LIMIT_REACHED: "validation.limit_reached",
     }
-    await message.answer(translate(messages[outcome.result]))
+    try:
+        await message.answer(translate(messages[outcome.result]))
+    except TelegramRetryAfter:
+        # Do not return HTTP 500: Telegram would retry the same command and hit Flood Control again.
+        return
 
 
 @router.callback_query(F.data.startswith("groups:show:"))
@@ -120,7 +187,13 @@ async def show_group(callback: CallbackQuery, session: AsyncSession) -> None:
 
     status = translate("groups.connected") if group.is_active and group.bot_can_post else translate("groups.unavailable")
     await callback.message.edit_text(
-        translate("groups.details", title=group.title, status=status, chat_id=group.chat_id),
+        translate(
+            "groups.details",
+            title=group.title,
+            status=status,
+            slow_mode=f"{group.slow_mode_delay} soniya" if group.slow_mode_delay else "yo'q",
+            chat_id=group.chat_id,
+        ),
         reply_markup=group_details_keyboard(group.id),
     )
     await callback.answer()
@@ -166,7 +239,7 @@ async def request_group_deletion(callback: CallbackQuery, session: AsyncSession)
 
 
 @router.callback_query(F.data.startswith("groups:delete_confirm:"))
-async def delete_group(callback: CallbackQuery, session: AsyncSession) -> None:
+async def delete_group(callback: CallbackQuery, session: AsyncSession, bot: Bot) -> None:
     """Disconnect one group from the callback user after confirmation."""
     if callback.from_user is None or callback.message is None or callback.data is None:
         return
@@ -177,10 +250,35 @@ async def delete_group(callback: CallbackQuery, session: AsyncSession) -> None:
         return
 
     user = await get_user_by_telegram_id(session, callback.from_user.id)
-    disconnected = await disconnect_group(session, user_id=user.id, group_id=group_id) if user else False
-    if not disconnected:
+    if user is None:
         await callback.answer(translate("common.not_found"), show_alert=True)
         return
 
-    await callback.message.edit_text(translate("groups.disconnected"))
+    orphaned_announcement_ids = await list_announcements_orphaned_by_group_disconnect(
+        session, user_id=user.id, group_id=group_id
+    )
+    messages_to_delete = []
+    for announcement_id in orphaned_announcement_ids:
+        messages_to_delete.extend(
+            await list_delivery_message_ids(session, user_id=user.id, announcement_id=announcement_id)
+        )
+
+    # Deleting historical messages can take a while, so answer the callback first.
     await callback.answer()
+    disconnected = await disconnect_group(session, user_id=user.id, group_id=group_id)
+    if not disconnected:
+        return
+
+    for chat_id, message_ids in messages_to_delete:
+        for message_id in message_ids:
+            try:
+                await bot.delete_message(chat_id, message_id)
+            except Exception:
+                # Database removal must still succeed if Telegram rejects an old message.
+                continue
+
+    try:
+        await callback.message.edit_text(translate("groups.disconnected"))
+    except TelegramBadRequest as error:
+        if "message is not modified" not in str(error).lower():
+            raise

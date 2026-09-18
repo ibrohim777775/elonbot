@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from sqlalchemy import delete, select
+from sqlalchemy.orm import aliased
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from elonbot.database.base import utc_now
-from elonbot.database.enums import AnnouncementStatus, ChatType
+from elonbot.database.enums import ChatType
 from elonbot.database.models import Announcement, AnnouncementGroup, TelegramGroup, UserGroup
 
 
@@ -22,6 +23,66 @@ class ConnectedGroup:
     title: str
     bot_can_post: bool
     is_active: bool
+    slow_mode_delay: int
+
+
+async def get_active_group_by_chat_id(session: AsyncSession, chat_id: int) -> TelegramGroup | None:
+    """Return a group already known to have an active, posting-capable bot."""
+    return await session.scalar(
+        select(TelegramGroup).where(
+            TelegramGroup.chat_id == chat_id,
+            TelegramGroup.is_active.is_(True),
+            TelegramGroup.bot_can_post.is_(True),
+        )
+    )
+
+
+async def has_user_group_connection(session: AsyncSession, *, user_id: int, group_id: int) -> bool:
+    """Return whether this user already has a connection row for the group."""
+    return await session.scalar(
+        select(UserGroup.id).where(UserGroup.user_id == user_id, UserGroup.group_id == group_id)
+    ) is not None
+
+
+async def list_available_groups_for_user(session: AsyncSession, user_id: int) -> list[ConnectedGroup]:
+    """List active bot groups that this user has not connected yet."""
+    already_connected = (
+        select(UserGroup.id)
+        .where(
+            UserGroup.user_id == user_id,
+            UserGroup.group_id == TelegramGroup.id,
+            UserGroup.is_active.is_(True),
+        )
+        .exists()
+    )
+    rows = await session.execute(
+        select(
+            TelegramGroup.id,
+            TelegramGroup.chat_id,
+            TelegramGroup.title,
+            TelegramGroup.bot_can_post,
+            TelegramGroup.is_active,
+            TelegramGroup.slow_mode_delay,
+        )
+        .where(
+            TelegramGroup.is_active.is_(True),
+            TelegramGroup.bot_can_post.is_(True),
+            ~already_connected,
+        )
+        .order_by(TelegramGroup.title)
+    )
+    return [ConnectedGroup(*row) for row in rows]
+
+
+async def get_active_group_by_id(session: AsyncSession, group_id: int) -> TelegramGroup | None:
+    """Return an active group by its internal ID."""
+    return await session.scalar(
+        select(TelegramGroup).where(
+            TelegramGroup.id == group_id,
+            TelegramGroup.is_active.is_(True),
+            TelegramGroup.bot_can_post.is_(True),
+        )
+    )
 
 
 async def connect_group(
@@ -32,6 +93,8 @@ async def connect_group(
     chat_id: int,
     title: str,
     chat_type: ChatType,
+    slow_mode_delay: int,
+    bot_is_admin: bool,
 ) -> TelegramGroup:
     """Upsert a Telegram group and create or reactivate the user's connection to it."""
     now = utc_now()
@@ -42,7 +105,9 @@ async def connect_group(
             title=title,
             chat_type=chat_type,
             bot_can_post=True,
+            bot_is_admin=bot_is_admin,
             is_active=True,
+            slow_mode_delay=slow_mode_delay,
             verified_at=now,
         )
         .on_conflict_do_update(
@@ -51,7 +116,9 @@ async def connect_group(
                 "title": title,
                 "chat_type": chat_type,
                 "bot_can_post": True,
+                "bot_is_admin": bot_is_admin,
                 "is_active": True,
+                "slow_mode_delay": slow_mode_delay,
                 "verified_at": now,
             },
         )
@@ -116,6 +183,7 @@ async def list_user_groups(session: AsyncSession, user_id: int) -> list[Connecte
             TelegramGroup.title,
             TelegramGroup.bot_can_post,
             TelegramGroup.is_active,
+            TelegramGroup.slow_mode_delay,
         )
         .join(UserGroup, UserGroup.group_id == TelegramGroup.id)
         .where(UserGroup.user_id == user_id, UserGroup.is_active.is_(True))
@@ -136,6 +204,7 @@ async def get_user_group(
             TelegramGroup.title,
             TelegramGroup.bot_can_post,
             TelegramGroup.is_active,
+            TelegramGroup.slow_mode_delay,
         )
         .join(UserGroup, UserGroup.group_id == TelegramGroup.id)
         .where(
@@ -149,7 +218,7 @@ async def get_user_group(
 
 
 async def disconnect_group(session: AsyncSession, *, user_id: int, group_id: int) -> bool:
-    """Disconnect a group from one user and pause their empty announcements."""
+    """Disconnect a group and remove the user's announcements left without groups."""
     connection = await get_user_group(session, user_id=user_id, group_id=group_id)
     if connection is None:
         return False
@@ -174,12 +243,34 @@ async def disconnect_group(session: AsyncSession, *, user_id: int, group_id: int
                 select(AnnouncementGroup.id).where(AnnouncementGroup.announcement_id == announcement_id)
             )
             if remaining_link is None:
-                announcement = await session.get(Announcement, announcement_id)
-                if announcement is not None:
-                    announcement.status = AnnouncementStatus.PAUSED
-                    announcement.next_run_at = None
+                await session.execute(delete(Announcement).where(Announcement.id == announcement_id))
 
     await session.execute(
         delete(UserGroup).where(UserGroup.user_id == user_id, UserGroup.group_id == group_id)
     )
     return True
+
+
+async def list_announcements_orphaned_by_group_disconnect(
+    session: AsyncSession, *, user_id: int, group_id: int
+) -> list[int]:
+    """Return owned announcements that would have no group after this disconnect."""
+    other_link = aliased(AnnouncementGroup)
+    has_other_group = (
+        select(other_link.id)
+        .where(
+            other_link.announcement_id == Announcement.id,
+            other_link.group_id != group_id,
+        )
+        .exists()
+    )
+    result = await session.execute(
+        select(Announcement.id)
+        .join(AnnouncementGroup, AnnouncementGroup.announcement_id == Announcement.id)
+        .where(
+            Announcement.user_id == user_id,
+            AnnouncementGroup.group_id == group_id,
+            ~has_other_group,
+        )
+    )
+    return list(result.scalars())

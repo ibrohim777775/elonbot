@@ -1,0 +1,22 @@
+{
+  "name": "elonbot", "version": "1.0.0", "private": true,
+  "description": "Scheduled announcements from user Telegram accounts via Teleproto",
+  "engines": { "node": ">=22 <25" },
+  "scripts": {
+    "build": "tsc",
+    "start": "tsx app/main.ts",
+    "start:prod": "node --enable-source-maps dist/main.js",
+    "dev": "node scripts/dev.mjs",
+    "migrate": "tsx app/migrate.ts",
+    "test": "tsx --test --test-concurrency=1 app/tests/*.test.ts",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "teleproto": "1.229.0", "big-integer": "1.6.52", "grammy": "^1.38.0",
+    "pg": "^8.16.0", "dotenv": "^17.2.0", "tsx": "^4.20.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0", "@types/pg": "^8.15.0", "typescript": "~5.9.3",
+    "@electric-sql/pglite": "^0.3.0"
+  }
+}

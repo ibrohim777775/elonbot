@@ -1,0 +1,25 @@
+.help-page { padding-bottom: calc(36px + env(safe-area-inset-bottom)); }
+a:focus-visible, summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 3px; }
+.app-nav, .help-languages { display: flex; gap: 8px; max-width: 720px; margin: 0 auto; padding: 0 24px 12px; }
+.app-nav { position: sticky; top: 0; z-index: 2; padding-top: 10px; background: var(--tg-theme-secondary-bg-color, #f3f6fb); }
+.app-nav a, .help-languages a { display: flex; align-items: center; justify-content: center; min-height: 44px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 12px; color: var(--muted); text-decoration: none; font-size: 14px; font-weight: 600; }
+.app-nav a { flex: 1; }
+.app-nav [aria-current="page"], .help-languages [aria-current="page"] { color: var(--accent); background: var(--surface); border-color: var(--accent); }
+.help-languages a { min-width: 105px; }
+.guide { overflow-wrap: anywhere; line-height: 1.75; }
+.guide article { margin-top: 20px; padding: 24px; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); }
+.guide h1 { font-size: clamp(26px, 6vw, 34px); margin-top: 0; margin-bottom: 22px; line-height: 1.2; }
+.guide h2 { font-size: 20px; line-height: 1.4; margin: 32px 0 14px; padding-top: 24px; border-top: 1px solid var(--line); scroll-margin-top: 85px; }
+.guide p, .guide ul { font-size: 16px; margin: 14px 0; }
+.guide ul { padding-left: 22px; }
+.guide li + li { margin-top: 8px; }
+.guide-contents { border: 1px solid var(--line); border-radius: 14px; background: var(--surface); }
+.guide-contents summary { padding: 14px 18px; font-weight: 600; cursor: pointer; }
+.guide-contents nav { display: grid; padding: 0 18px 12px; }
+.guide-contents a { padding: 8px 0; color: var(--accent); font-size: 14px; }
+.guide-footer { max-width: 720px; margin: 20px auto 0; padding: 0 24px; }
+.guide-footer .primary { width: 100%; }
+body.help-open #screen, body.help-open #footer { display: none; }
+#help-screen > .primary { margin-top: 16px; }
+@media (max-width: 380px) { .app-nav, .help-languages, .guide-footer { padding-inline: 16px; }.guide article { padding: 18px; }.guide p, .guide ul { font-size: 15px; } }
+@media (prefers-color-scheme: dark) { :root { color: var(--tg-theme-text-color, #e4eaf4); background: var(--tg-theme-secondary-bg-color, #111b2a); --surface: var(--tg-theme-bg-color, #19263a); --muted: var(--tg-theme-hint-color, #a8b7cd); --accent: var(--tg-theme-button-color, #83b2ff); --accent-text: var(--tg-theme-button-text-color, #101f35); }.app-nav { background: var(--tg-theme-secondary-bg-color, #111b2a); } }
