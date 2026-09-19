@@ -3,6 +3,8 @@ import { Language, t } from "./i18n";
 export function botCommands(language: Language, admin = false) {
   const commands = [
     { command: "boshlash", description: t("commands.boshlash", {}, language) },
+    { command: "back", description: t("commands.back", {}, language) },
+    { command: "cancel", description: t("commands.cancel", {}, language) },
     { command: "settings", description: t("menu.settings", {}, language) },
     { command: "help", description: t("menu.help", {}, language) },
     { command: "app", description: t("app.open", {}, language) },

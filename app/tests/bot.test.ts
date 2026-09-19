@@ -36,7 +36,19 @@ test("full album wizard, persistent state, duplicate updates, editing and owners
       await bot.handleUpdate({ update_id: ++updateId, message: { message_id: updateId, date: 0, chat: { id: 101, type: "private" }, from: sender(), ...fields } } as any);
     };
     await callback("ann:create");
-    for (let i = 0; i < 4; i++) await message({ photo: [{ file_id: `photo-${i}`, file_unique_id: String(i), width: 100, height: 100 }], ...(i === 0 ? { caption: "Saved album" } : {}) });
+    await message({ photo: [{ file_id: "direct-upload", file_unique_id: "direct", width: 100, height: 100 }] });
+    assert.equal(sent.at(-1).text, t("announcements.send_ready_photo"));
+    const photoIds: number[] = [];
+    for (let i = 0; i < 10; i++) {
+      await message({ forward_origin: { type: "hidden_user", sender_user_name: "Source", date: 0 }, media_group_id: "album",
+        photo: [{ file_id: `photo-${i}`, file_unique_id: String(i), width: 100, height: 100 }], ...(i === 0 ? { caption: "Saved album" } : {}) });
+      photoIds.push(updateId);
+    }
+    await message({ forward_origin: { type: "hidden_user", sender_user_name: "Source", date: 0 }, photo: [{ file_id: "eleventh", file_unique_id: "11", width: 100, height: 100 }] });
+    assert.equal(sent.at(-1).text, t("announcements.photo_limit"));
+    const draft = (await one(database, "SELECT data FROM user_states WHERE user_id=1")).data;
+    assert.deepEqual(draft.photoMessageIds, photoIds); assert.equal(draft.photos, undefined);
+    assert.doesNotMatch(JSON.stringify(draft), /photo-\d|file_id|direct-upload|eleventh/);
     // Rebuild the bot half way through; draft comes from PostgreSQL.
     bot = await makeBot();
     await callback("ann:photos_done"); await callback("ann:group:1"); await callback("ann:groups_done");
@@ -46,9 +58,10 @@ test("full album wizard, persistent state, duplicate updates, editing and owners
     const confirm = await callback("ann:confirm"); await bot.handleUpdate(confirm as any);
     const a = await one(database, "SELECT * FROM announcements");
     assert.equal(a.text, "Saved album"); assert.equal(a.interval_minutes, 5); assert.ok(a.next_run_at > new Date());
-    assert.deepEqual(a.photo_file_ids, ["photo-0", "photo-1", "photo-2", "photo-3"]);
+    assert.deepEqual(a.photo_message_ids, photoIds); assert.deepEqual(a.photo_file_ids, []); assert.equal(a.photo_file_id, null);
     assert.equal((await one(database, "SELECT count(*)::int n FROM announcements")).n, 1);
-    assert.deepEqual((await one(database, "SELECT photo_file_ids FROM templates")).photo_file_ids, a.photo_file_ids);
+    const savedTemplate = await one(database, "SELECT * FROM templates");
+    assert.deepEqual(savedTemplate.photo_message_ids, photoIds); assert.deepEqual(savedTemplate.photo_file_ids, []); assert.equal(savedTemplate.photo_file_id, null);
     assert.ok(sent.filter(s => ["sendMessage", "sendPhoto", "editMessageText"].includes(s.method)).every(s => Number(s.chat_id) > 0));
     await callback(`ann:edit_text:${a.id}`, 202);
     assert.equal((await one(database, "SELECT data FROM user_states WHERE user_id=2")).data.editId, undefined);
@@ -66,7 +79,7 @@ test("full album wizard, persistent state, duplicate updates, editing and owners
     bot = await makeBot(); // Template settings must survive a restart with the draft.
     await callback("ann:confirm");
     const reused = await one(database, "SELECT * FROM announcements WHERE id<>$1", [a.id]);
-    assert.equal(reused.text, "Saved album"); assert.deepEqual(reused.photo_file_ids, a.photo_file_ids);
+    assert.equal(reused.text, "Saved album"); assert.deepEqual(reused.photo_message_ids, photoIds); assert.deepEqual(reused.photo_file_ids, []);
     assert.equal(reused.interval_minutes, template.interval_minutes); assert.equal(reused.first_run_mode, template.first_run_mode);
     assert.equal(reused.send_start_minute, template.send_start_minute); assert.equal(reused.send_end_minute, template.send_end_minute);
     assert.deepEqual((await database.query("SELECT group_id FROM announcement_groups WHERE announcement_id=$1", [reused.id])).rows.map(g => String(g.group_id)), ["1"]);

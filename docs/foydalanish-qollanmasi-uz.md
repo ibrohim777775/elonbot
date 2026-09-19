@@ -8,6 +8,8 @@ Elonbot e'lonlaringizni tanlagan Telegram guruhlaringizga avtomatik yuboradi. Xa
 
 Qo'llanma doim bot menyusidagi «📖 Qo'llanma» tugmasi va /help buyrug'i orqali ochiladi. Guruh qo'shish sahifasida ham «Qo'llanma» bo'limi bor.
 
+Oldingi bosqichga qaytish uchun bot xabari ostidagi «⬅️ Orqaga» tugmasini bosing yoki /back yuboring. Yaratish bosqichlari orasida qaytganda matn, rasmlar va tanlangan sozlamalar saqlanadi. Ro'yxatga qaytsangiz, «Qoralamani davom ettirish»ni bosing. /cancel joriy kiritishni bekor qiladi. Telefonning tizimdagi «Orqaga» tugmasi bot bosqichlarini almashtirmaydi.
+
 **2. Telegram akkauntingizni ulang**
 
 «⚙️ Sozlamalar» → «Telegram akkaunt» → «Akkauntni ulash» ni bosing va berilgan havolani oching.
@@ -36,7 +38,9 @@ Guruhlarni qo'shgach, «Botga qaytish», so'ng botdagi «Botda davom etish» ni 
 
 «E'lonlarim» → «E'lon yaratish» ni bosing.
 
-E'lon matnini yuboring. Xohlasangiz, matn bilan birga rasm yuboring yoki boshqa chatdagi tayyor e'lonni shu botga yuboring. Jami 4 tagacha rasm qo'shish mumkin. Rasmlarni yuborib bo'lgach, «Tayyor» ni bosing.
+E'lon matnini yuboring. Rasmli e'lon uchun boshqa chatdagi tayyor xabar yoki albomni «Forward / Переслать» orqali shu botga yuboring. Jami 10 tagacha rasm qo'shish mumkin. Butun albom yuklanishini kuting va «Tayyor» ni bosing. Rasmlarni almashtirish uchun ham yangi albomni to'liq yo'naltirib, «Tayyor» bilan tasdiqlang; «Orqaga» almashtirishni bekor qiladi.
+
+Yo'naltirilgan xabarlarni bot chatidan o'chirmang: yuborish uchun rasmlar shu yerdan olinadi. Bazada faqat shu xabarlarning raqamlari saqlanadi, rasmlarning o'zi Telegramda qoladi. Asl xabarlar mavjud bo'lmasa, yuborish to'xtatiladi va bot rasmlarni qayta yo'naltirishni so'raydi. Eski e'lon va shablonlar ishlashda davom etadi. Eski shablondan foydalanganda bot yuborgan ko'rib chiqish albomini ham chatda qoldiring.
 
 Keyin bitta e'lon uchun ko'pi bilan 30 ta guruh tanlang. Tanlangan guruh yonida ✅, ro'yxat tepasida esa tanlangan guruhlar soni chiqadi. «Tayyor» ni bosing.
 

@@ -7,6 +7,7 @@ import { HTMLParser } from "teleproto/extensions/html";
 import { CustomFile } from "teleproto/client/uploads";
 import { computeCheck } from "teleproto/Password";
 import { ErrorDiagnostic, errorDiagnostic, errorFrames, logError } from "./log";
+import { maxAnnouncementPhotos } from "./media";
 
 export class Failure extends Error {
   diagnostic?: ErrorDiagnostic;
@@ -51,7 +52,10 @@ type Live = { client: TelegramClient<StringSession>; session: string; touched: n
 export class TelegramService {
   private pending = new Map<string, Pending>();
   private clients = new Map<string, Live>();
-  constructor(private credentials = { apiId: Number(process.env.TELEGRAM_API_ID), apiHash: process.env.TELEGRAM_API_HASH ?? "" }) {}
+  private mediaClient?: Promise<TelegramClient<StringSession>>;
+  constructor(private credentials: { apiId: number; apiHash: string; botToken?: string } = {
+    apiId: Number(process.env.TELEGRAM_API_ID), apiHash: process.env.TELEGRAM_API_HASH ?? "", botToken: process.env.BOT_TOKEN,
+  }) {}
 
   private make(session = "") {
     const client = new TelegramClient(new StringSession(session), this.credentials.apiId, this.credentials.apiHash, {
@@ -72,6 +76,66 @@ export class TelegramService {
 
   async close() {
     await Promise.allSettled([...this.pending.values(), ...this.clients.values()].map(v => v.client.destroy()));
+    if (this.mediaClient) await this.mediaClient.then(client => client.destroy()).catch(() => {});
+  }
+
+  private async botMediaClient() {
+    if (!this.mediaClient) {
+      this.mediaClient = (async () => {
+        if (!this.credentials.botToken) throw new Failure("PHOTO_SOURCE_UNAVAILABLE");
+        const client = this.make();
+        try {
+          await client.connect();
+          await client.invoke(new Api.auth.ImportBotAuthorization({ flags: 0, apiId: this.credentials.apiId,
+            apiHash: this.credentials.apiHash, botAuthToken: this.credentials.botToken }));
+          return client;
+        } catch (error) { await client.destroy(); throw error; }
+      })();
+      this.mediaClient.catch(() => { this.mediaClient = undefined; });
+    }
+    const client = await this.mediaClient;
+    if (!client.connected) await client.connect();
+    return client;
+  }
+
+  private async sourcePhotos(p: Record<string, any>) {
+    const ids = p.messageIds;
+    if (!Array.isArray(ids) || !ids.length || ids.length > maxAnnouncementPhotos || new Set(ids).size !== ids.length ||
+      ids.some(id => !Number.isSafeInteger(id) || id <= 0 || id > 2147483647) || !/^[1-9]\d*$/.test(String(p.ownerId))) {
+      throw new Failure("INVALID_PHOTO_SOURCE");
+    }
+    try {
+      // Bot API IDs belong to the bot account, not to the publishing user's MTProto session.
+      const client = await this.botMediaClient();
+      const result = await client.invoke(new Api.messages.GetMessages({ id: ids.map(id => new Api.InputMessageID({ id })) }));
+      if (!("messages" in result)) throw new Failure("PHOTO_SOURCE_MISSING");
+      const messages = ids.map(id => result.messages.find(message => message.id === id));
+      for (const message of messages) {
+        if (!(message instanceof Api.Message) || !(message.peerId instanceof Api.PeerUser) ||
+          message.peerId.userId.toString() !== String(p.ownerId) || !(message.media instanceof Api.MessageMediaPhoto) ||
+          !(message.media.photo instanceof Api.Photo)) throw new Failure("PHOTO_SOURCE_MISSING");
+      }
+      const photos: string[] = [];
+      for (const message of messages) {
+        const data = await client.downloadMedia(message as Api.Message, {
+          signal: AbortSignal.timeout(30_000),
+          progressCallback: async received => { if (received.greater(10 * 1024 * 1024)) throw new Failure("PHOTO_SOURCE_UNAVAILABLE"); },
+        });
+        if (!Buffer.isBuffer(data) || !data.length || data.length > 10 * 1024 * 1024) throw new Failure("PHOTO_SOURCE_UNAVAILABLE");
+        photos.push(data.toString("base64"));
+      }
+      return photos;
+    } catch (error) {
+      const failure = safeError(error);
+      if (["MESSAGE_ID_INVALID", "MSG_ID_INVALID"].includes(failure.code)) throw new Failure("PHOTO_SOURCE_MISSING");
+      if (["AUTH_KEY_UNREGISTERED", "SESSION_REVOKED", "SESSION_EXPIRED"].includes(failure.code)) {
+        const expired = this.mediaClient; this.mediaClient = undefined;
+        if (expired) await expired.then(client => client.destroy()).catch(() => {});
+      }
+      if (["PHOTO_SOURCE_MISSING", "PHOTO_SOURCE_UNAVAILABLE", "TELEGRAM_UNAVAILABLE"].includes(failure.code) || failure.seconds) throw failure;
+      // A bot-reader authentication failure must never invalidate a user's publishing account.
+      throw new Failure("PHOTO_SOURCE_UNAVAILABLE");
+    }
   }
 
   private async finish(key: string, expectedId: string) {
@@ -183,6 +247,7 @@ export class TelegramService {
 
   async execute(method: string, p: Record<string, any>) {
     if (method === "health") return { ok: true };
+    if (method === "photos.read") return this.sourcePhotos(p);
     if (method.startsWith("login.")) return this.login(method.slice(6), p);
     if (method === "groups") return this.groups(p);
     const client = await this.client(p);
@@ -208,7 +273,7 @@ export class TelegramService {
     if (text.length > 4096) throw new Failure("MESSAGE_TOO_LONG");
     const photos: string[] = p.photos ?? [];
     const sendAs = target instanceof Api.InputPeerChannel ? new Api.InputPeerSelf() : undefined;
-    if (photos.length > 4) throw new Failure("TOO_MANY_PHOTOS");
+    if (photos.length > maxAnnouncementPhotos) throw new Failure("TOO_MANY_PHOTOS");
     const ids: number[] = [...(p.messageIds ?? [])];
     let step = 0;
     let operation = "send";

@@ -2,7 +2,8 @@ import { Api } from "grammy";
 import { Config } from "./config";
 import { Database, lockUser, one } from "./db";
 import { planState, tariff } from "./billing";
-import { photosOf } from "./delivery";
+import { photosOf, photoMessageIds, photoCount } from "./media";
+import { TelegramTransport } from "./accounts";
 import { MiniAppUser } from "./miniapp-auth";
 import { AdminAuth } from "./admin-auth";
 import { Broadcasts } from "./broadcasts";
@@ -24,7 +25,7 @@ function idOf(value: unknown) {
 export class Admin {
   readonly browser: AdminAuth;
   readonly broadcasts: Broadcasts;
-  constructor(readonly config: Config, readonly database: Database, readonly support: Support, readonly api: Api) {
+  constructor(readonly config: Config, readonly database: Database, readonly support: Support, readonly api: Api, readonly telegram?: TelegramTransport) {
     this.browser = new AdminAuth(config, database); this.broadcasts = new Broadcasts(database, api);
   }
   authorize(identity: MiniAppUser) {
@@ -139,16 +140,23 @@ export class Admin {
     const source = sources[kind]; if (!source) throw new Failure("INVALID_REQUEST");
     const rows = (await this.database.query(`SELECT ${source.fields} FROM ${source.from} WHERE a.user_id=$1 ORDER BY ${source.order} LIMIT 20 OFFSET $2`, [id, (page - 1) * 20])).rows;
     if (["announcements", "templates"].includes(kind)) for (const row of rows) {
-      row.photo_count = photosOf(row).length; delete row.photo_file_id; delete row.photo_file_ids;
+      row.photo_count = photoCount(row); delete row.photo_file_id; delete row.photo_file_ids; delete row.photo_message_ids;
     }
     return { rows, page, total: (await one(this.database, `SELECT count(*)::int n FROM ${source.from} WHERE a.user_id=$1`, [id])).n };
   }
   async file(path: string, identity: MiniAppUser) {
     this.authorize(identity);
-    const match = /^\/admin-api\/files\/(support|announcements|templates)\/([1-9][0-9]{0,17})\/([0-3])$/.exec(path);
+    const match = /^\/admin-api\/files\/(support|announcements|templates)\/([1-9][0-9]{0,17})\/([0-9])$/.exec(path);
     if (!match) throw new Failure("NOT_FOUND");
     const table = match[1] === "support" ? "support_messages" : match[1];
     const row = await one(this.database, `SELECT * FROM ${table} WHERE id=$1`, [match[2]]);
+    if (row && table !== "support_messages" && photoMessageIds(row).length) {
+      const id = photoMessageIds(row)[Number(match[3])];
+      if (!id || !this.telegram) throw new Failure("NOT_FOUND");
+      const owner = await one(this.database, "SELECT telegram_id FROM users WHERE id=$1", [row.user_id]);
+      const photos = await this.telegram.execute("photos.read", { ownerId: String(owner.telegram_id), messageIds: [id] });
+      return { data: Buffer.from(photos[0], "base64"), name: "photo.jpg", type: "image/jpeg" };
+    }
     const fileId = row && (table === "support_messages" ? Number(match[3]) === 0 && row.file_id : photosOf(row)[Number(match[3])]);
     if (!fileId) throw new Failure("NOT_FOUND");
     const meta = await this.api.getFile(fileId);

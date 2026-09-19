@@ -11,12 +11,15 @@ import { planState, requireCreationAccess } from "./billing";
 import { Support } from "./support";
 import { botCommands } from "./commands";
 import { AdminAuth } from "./admin-auth";
+import { maxAnnouncementPhotos, photoMessageIds, photoCount } from "./media";
 import { SendingWindow, formatMinute, nextSendingTime, parseClockTime, parseSendingWindow, validSendingWindow } from "./schedule";
 
 type Wizard = SendingWindow & { kind?: "announcement" | "template"; step?: string; text?: string; photos?: string[];
+  photoMessageIds?: number[];
   groups?: string[]; groupPage?: number; interval?: number; saveTemplate?: boolean; fromTemplate?: boolean; mode?: string;
   templateId?: string; contact_phone?: string | null; contact_telegram?: string | null; contact_name?: string | null;
   editId?: string; table?: "announcements" | "templates"; candidates?: any[];
+  confirmationBack?: "template" | "first_run" | "save_template"; clockManual?: boolean;
   candidatesCached?: boolean; candidatesRetryAt?: number; support?: boolean };
 type Ctx = Context & { db: Queryable; userId: string; wizard: Wizard; sendNow?: boolean; notifySupport?: boolean };
 const intervals = [5, 10, 15, 20, 60, 120, 180, 300, 480];
@@ -60,6 +63,10 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     .webApp(t("menu.help"), helpUrl()).resized().persistent();
   const bot = new Bot<Ctx>(config.botToken);
   const support = supportService ?? new Support(database, config, bot.api);
+  const wizardBack = (ctx: Ctx, keyboard = new InlineKeyboard()) => {
+    if (keyboard.inline_keyboard.at(-1)?.length) keyboard.row();
+    return keyboard.text(`⬅️ ${t("common.back")}`, `wizard:back:${ctx.wizard.step}`);
+  };
   bot.use(async (ctx, next) => {
     if (!ctx.from || ctx.chat?.type !== "private") return;
     // Clear Telegram's button spinner before database work or a pending delivery.
@@ -118,7 +125,8 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       .row().text(t("common.back"), "settings:open"));
   }
   async function helpMenu(ctx: Ctx) {
-    await ctx.reply(t("help.prompt"), { reply_markup: new InlineKeyboard().webApp(t("menu.help"), helpUrl()) });
+    await ctx.reply(t("help.prompt"), { reply_markup: new InlineKeyboard().webApp(t("menu.help"), helpUrl())
+      .row().text(t("common.back"), "menu:main") });
   }
   async function tariffMenu(ctx: Ctx) {
     const user = await one(ctx.db, "SELECT trial_started_at,trial_ends_at,paid_until FROM users WHERE id=$1", [ctx.userId]);
@@ -129,19 +137,23 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   }
   async function openSupport(ctx: Ctx) {
     ctx.wizard.support = true;
-    await ctx.reply(t("support.prompt"), { reply_markup: button("support.done", "support:done") });
+    await ctx.reply(t("support.prompt"), { reply_markup: button("support.done", "support:done")
+      .row().text(t("common.back"), "support:done") });
   }
   const openGroupsApp = async (ctx: Ctx) => {
     await ctx.reply(t("app.open_prompt"), { reply_markup: new InlineKeyboard().webApp(t("app.open"), `${config.baseUrl}/app`)
-      .row().text(t("app.continue"), "groups:continue") });
+      .row().text(t("app.continue"), "groups:continue").row().text(t("common.back"), "groups:continue") });
   };
 
   const listing = async (ctx: Ctx, table: "announcements" | "templates") => {
     const prefix = table === "announcements" ? "ann" : "templates";
     const rows = (await ctx.db.query(`SELECT * FROM ${table} WHERE user_id=$1 ${table === "announcements" ? "AND status<>'deleted'" : ""} ORDER BY updated_at DESC`, [ctx.userId])).rows;
     const keyboard = new InlineKeyboard();
-    for (const row of rows) keyboard.text(`${photosOf(row).length ? "📷 " : ""}${row.text.replace(/\n/g, " ").slice(0, 36)}`, `${prefix}:show:${row.id}`).row();
-    keyboard.text(t(`${table}.create`), `${prefix}:create`);
+    for (const row of rows) keyboard.text(`${photoCount(row) ? "📷 " : ""}${row.text.replace(/\n/g, " ").slice(0, 36)}`, `${prefix}:show:${row.id}`).row();
+    if (ctx.wizard.step === "draft" && ctx.wizard.kind === (table === "templates" ? "template" : "announcement")) {
+      keyboard.text(t("announcements.resume"), "wizard:resume").row();
+    }
+    keyboard.text(t(`${table}.create`), `${prefix}:create`).row().text(t("common.back"), "menu:main");
     await show(ctx, t(`${table}.${rows.length ? "title" : "empty"}`), keyboard);
   };
   const listGroups = async (ctx: Ctx, requestedPage = 0) => {
@@ -150,7 +162,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     const keyboard = new InlineKeyboard();
     for (const row of rows.slice(page * groupsPerPage, (page + 1) * groupsPerPage)) keyboard.text(`${row.can_post ? "" : "⚠️ "}${row.title.slice(0, 45)}`, `groups:show:${row.id}`).row();
     groupNavigation(keyboard, page, rows.length, "groups:list_page");
-    keyboard.text(t("groups.add"), "groups:add");
+    keyboard.text(t("groups.add"), "groups:add").row().text(t("common.back"), "menu:main");
     await show(ctx, t(rows.length ? "groups.title" : "groups.empty"), keyboard);
   };
   const accountMenu = async (ctx: Ctx) => {
@@ -159,29 +171,30 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     await show(ctx, t(`account.${action}_prompt`), button(`account.${action}`, `account:${action}`).row().text(t("common.back"), "settings:open"));
   };
   const askGroups = async (ctx: Ctx) => {
+    ctx.wizard.step = ctx.wizard.editId ? "edit_groups" : "groups";
     await accounts.params(ctx.db, ctx.userId);
     const rows = (await groups.list(ctx.db, ctx.userId)).filter(row => row.can_post);
-    if (!rows.length) { await show(ctx, t("announcements.no_groups"), button("groups.add", "groups:add")); return; }
-    ctx.wizard.step = ctx.wizard.editId ? "edit_groups" : "groups";
+    if (!rows.length) { await show(ctx, t("announcements.no_groups"), wizardBack(ctx, button("groups.add", "groups:add"))); return; }
     ctx.wizard.groups ??= [];
     const page = ctx.wizard.groupPage = groupPage(ctx.wizard.groupPage ?? 0, rows.length);
     const keyboard = new InlineKeyboard();
     for (const row of rows.slice(page * groupsPerPage, (page + 1) * groupsPerPage)) keyboard.text(`${ctx.wizard.groups.includes(String(row.id)) ? "✅ " : ""}${row.title.slice(0, 40)}`, `ann:group:${row.id}`).row();
     groupNavigation(keyboard, page, rows.length, "ann:groups_page");
     keyboard.text(t("common.done"), "ann:groups_done");
-    await show(ctx, t("announcements.select_groups", { count: ctx.wizard.groups.length, limit: config.maxGroupsPerAnnouncement }), keyboard);
+    await show(ctx, t("announcements.select_groups", { count: ctx.wizard.groups.length, limit: config.maxGroupsPerAnnouncement }), wizardBack(ctx, keyboard));
   };
   const askInterval = async (ctx: Ctx) => {
     ctx.wizard.step = ctx.wizard.editId ? "edit_interval" : "interval";
     const keyboard = new InlineKeyboard();
     for (const value of intervals) keyboard.text(t("language.minutes", { count: value }), `ann:interval:${value}`).row();
-    await show(ctx, t("announcements.select_interval"), keyboard);
+    await show(ctx, t("announcements.select_interval"), wizardBack(ctx, keyboard));
   };
   const askWindow = async (ctx: Ctx) => {
     await askClock(ctx, "start");
   };
   async function askClock(ctx: Ctx, part: "start" | "end") {
     ctx.wizard.step = `window_${part}`;
+    delete ctx.wizard.clockManual;
     const keyboard = new InlineKeyboard();
     for (let i = 0; i < 24; i++) {
       const minute = (part === "end" ? i + 1 : i) * 60;
@@ -189,10 +202,9 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       if ((i + 1) % 4 === 0) keyboard.row();
     }
     keyboard.text(t("announcements.window_custom"), `ann:clock:${part}:manual`).row();
-    if (part === "end") keyboard.text(t("common.back"), "ann:clock:back").row();
     keyboard.text(t("announcements.window_all"), "ann:window:all").row()
       .text(t("common.cancel"), ctx.wizard.editId ? `ann:show:${ctx.wizard.editId}` : "ann:cancel");
-    await show(ctx, t(`announcements.window_${part}`, { start: formatMinute(ctx.wizard.send_start_minute ?? 0) }), keyboard);
+    await show(ctx, t(`announcements.window_${part}`, { start: formatMinute(ctx.wizard.send_start_minute ?? 0) }), wizardBack(ctx, keyboard));
   }
   async function chooseClock(ctx: Ctx, minute: number) {
     if (ctx.wizard.step === "window_start") {
@@ -203,6 +215,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   async function saveWindow(ctx: Ctx, window: SendingWindow) {
     if (!validSendingWindow(window)) throw new Failure("INVALID_SENDING_WINDOW");
     const w = ctx.wizard;
+    delete w.clockManual;
     if (w.editId) {
       await lockUser(ctx.db, ctx.userId);
       const record = await owned(ctx, "announcements", w.editId);
@@ -220,28 +233,57 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   async function askFirstRun(ctx: Ctx) {
     const w = ctx.wizard;
     w.step = "first_run";
-    await show(ctx, t("announcements.select_first_run"), new InlineKeyboard().text(t("announcements.immediate"), "ann:first:immediate").text(t("announcements.scheduled"), "ann:first:scheduled"));
+    await show(ctx, t("announcements.select_first_run"), wizardBack(ctx, new InlineKeyboard().text(t("announcements.immediate"), "ann:first:immediate").text(t("announcements.scheduled"), "ann:first:scheduled")));
+  }
+  async function askSaveTemplate(ctx: Ctx) {
+    ctx.wizard.step = "save_template";
+    await show(ctx, t("announcements.save_template"), wizardBack(ctx, confirm("ann:save_template:yes", "ann:save_template:no")));
   }
   async function draftDescription(ctx: Ctx, w: Wizard) {
     const rows = w.groups?.length ? (await ctx.db.query("SELECT title,chat_id FROM groups WHERE id=ANY($1::bigint[]) ORDER BY id", [w.groups])).rows : [];
     return t("templates.settings", { interval: w.interval!, groups: rows.map(g => `${g.title} (${g.chat_id})`).join(", ") || "—",
-      window: windowDescription(w), first: t(`announcements.${w.mode}`), photos: w.photos?.length ?? 0 });
+      window: windowDescription(w), first: t(`announcements.${w.mode}`), photos: draftPhotoCount(w) });
+  }
+  const draftPhotoCount = (w: Wizard) => (w.photoMessageIds?.length ?? 0) + (w.photos?.length ?? 0);
+  async function draftSources(ctx: Ctx) {
+    const w = ctx.wizard;
+    if (!w.photos?.length) return;
+    // Reusing an old template also produces a new record without legacy file IDs.
+    // These preview messages stay in Telegram; only their message IDs enter the new draft.
+    const messages = w.photos.length === 1 ? [await ctx.replyWithPhoto(w.photos[0])] :
+      await ctx.replyWithMediaGroup(w.photos.map(media => ({ type: "photo" as const, media })));
+    w.photoMessageIds = [...(w.photoMessageIds ?? []), ...messages.map(message => message.message_id)];
+    delete w.photos;
+  }
+  async function previewPhoto(ctx: Ctx, ids: number[], legacy: string[] = []) {
+    try {
+      if (ids.length) await ctx.api.copyMessage(ctx.chat!.id, ctx.chat!.id, ids[0], { caption: "" });
+      else if (legacy.length) await ctx.replyWithPhoto(legacy[0]);
+    } catch {
+      // A removed source must not hide the card's edit/delete actions.
+      await ctx.reply(t("delivery.photo_unavailable"));
+    }
   }
   const contentDescription = (w: Wizard) => [w.text, w.contact_name, w.contact_phone, w.contact_telegram].filter(Boolean).join("\n");
   async function showConfirmation(ctx: Ctx) {
-    const w = ctx.wizard; w.step = "confirm";
-    if (w.photos?.length) await ctx.replyWithPhoto(w.photos[0]);
+    const w = ctx.wizard;
+    w.confirmationBack = w.step === "save_template" ? "save_template" : w.step === "first_run" ? "first_run" : w.fromTemplate ? "template" : "first_run";
+    w.step = "confirm";
+    const legacyPreview = !!w.photos?.length;
+    await draftSources(ctx);
+    if (!legacyPreview) await previewPhoto(ctx, w.photoMessageIds ?? []);
     await show(ctx, `${t(w.kind === "template" ? "templates.preview" : "announcements.preview", {
       text: contentDescription(w), interval: w.interval!, groups: w.groups!.length, window: windowDescription(w),
-    })}\n\n${await draftDescription(ctx, w)}`, new InlineKeyboard()
+    })}\n\n${await draftDescription(ctx, w)}${draftPhotoCount(w) ? `\n\n${t("announcements.keep_photos")}` : ""}`, wizardBack(ctx, new InlineKeyboard()
       .text(t(w.kind === "template" ? "common.save" : "announcements.start"), w.kind === "template" ? "templates:save" : "ann:confirm")
-      .text(t("common.cancel"), "ann:cancel"));
+      .text(t("common.cancel"), "ann:cancel")));
   }
   const templateDraft = async (ctx: Ctx, id: string, kind: "template" | "announcement"): Promise<Wizard> => {
     const row = await owned(ctx, "templates", id);
     const selected = (await ctx.db.query("SELECT group_id FROM template_groups WHERE template_id=$1 ORDER BY group_id", [id])).rows;
     return { kind, templateId: id, fromTemplate: kind === "announcement", saveTemplate: false,
-      text: row.text, photos: photosOf(row), groups: selected.map(g => String(g.group_id)), interval: row.interval_minutes,
+      text: row.text, photos: photoMessageIds(row).length ? [] : photosOf(row), photoMessageIds: photoMessageIds(row),
+      groups: selected.map(g => String(g.group_id)), interval: row.interval_minutes,
       mode: row.first_run_mode, send_start_minute: row.send_start_minute, send_end_minute: row.send_end_minute,
       contact_phone: row.contact_phone, contact_telegram: row.contact_telegram, contact_name: row.contact_name };
   };
@@ -266,16 +308,18 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     await showConfirmation(ctx);
   }
   function validateContent(w: Wizard) {
-    if (!w.text || w.text.length > 4096 || !settingsReady(w) || (w.photos?.length ?? 0) > 4) throw new Failure("INVALID_CONTENT");
+    if (!w.text || w.text.length > 4096 || !settingsReady(w) || draftPhotoCount(w) > maxAnnouncementPhotos) throw new Failure("INVALID_CONTENT");
   }
   const saveTemplate = async (ctx: Ctx) => {
     const w = ctx.wizard;
     if (w.templateId || w.fromTemplate) throw new Failure("NOT_FOUND");
     validateContent(w);
-    const values = [ctx.userId, w.text, w.photos?.[0] ?? null, JSON.stringify(w.photos ?? []), w.interval, w.mode,
+    await draftSources(ctx);
+    const values = [ctx.userId, w.text, null, JSON.stringify([]), w.interval, w.mode,
       w.send_start_minute ?? null, w.send_end_minute ?? null, w.contact_phone ?? null, w.contact_telegram ?? null, w.contact_name ?? null];
+    values.push(JSON.stringify(w.photoMessageIds ?? []));
     const row = await one(ctx.db, `INSERT INTO templates(user_id,text,photo_file_id,photo_file_ids,interval_minutes,first_run_mode,
-      send_start_minute,send_end_minute,contact_phone,contact_telegram,contact_name) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id`, values);
+      send_start_minute,send_end_minute,contact_phone,contact_telegram,contact_name,photo_message_ids) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`, values);
     const id = String(row.id);
     for (const group of w.groups!) await ctx.db.query("INSERT INTO template_groups(template_id,group_id) VALUES($1,$2)", [id, group]);
     return id;
@@ -283,6 +327,16 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   const finishContent = async (ctx: Ctx) => {
     await askGroups(ctx);
   };
+  async function acceptPhoto(ctx: Ctx) {
+    if (!ctx.message?.forward_origin) { await ctx.reply(t("announcements.send_ready_photo")); return false; }
+    const w = ctx.wizard;
+    w.photoMessageIds ??= [];
+    if (w.photoMessageIds.includes(ctx.message.message_id)) return false;
+    if (draftPhotoCount(w) >= maxAnnouncementPhotos) { await ctx.reply(t("announcements.photo_limit")); return false; }
+    w.photoMessageIds.push(ctx.message.message_id);
+    w.photoMessageIds.sort((a, b) => a - b);
+    return true;
+  }
   const showCard = async (ctx: Ctx, table: "announcements" | "templates", id: string) => {
     const row = await owned(ctx, table, id);
     const prefix = table === "templates" ? "templates" : "ann";
@@ -297,9 +351,59 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       const draft = await templateDraft(ctx, id, "template");
       text += `\n\n${settingsReady(draft) ? await draftDescription(ctx, draft) : t("templates.needs_settings")}`;
     }
-    if (photosOf(row).length) await ctx.replyWithPhoto(photosOf(row)[0]);
+    await previewPhoto(ctx, photoMessageIds(row), photosOf(row));
     await show(ctx, text, keyboard);
   };
+
+  async function askContent(ctx: Ctx) {
+    const w = ctx.wizard; w.step = "content";
+    const keyboard = new InlineKeyboard();
+    if (w.text) keyboard.text(t("common.continue"), "ann:content_done").row();
+    if (w.kind === "announcement") keyboard.text(t("announcements.from_template"), "ann:create:template");
+    await show(ctx, t(w.text || draftPhotoCount(w) ? "announcements.content_saved" : "announcements.create_instruction"), wizardBack(ctx, keyboard));
+  }
+  async function editMenu(ctx: Ctx, id: string) {
+    await owned(ctx, "announcements", id);
+    ctx.wizard = { editId: id, table: "announcements", step: "edit_menu" };
+    const keyboard = new InlineKeyboard();
+    for (const field of ["text", "photo", "contact", "name", "groups", "interval", "window"]) keyboard.text(t(`announcements.edit_${field}`), `ann:edit_${field}:${id}`).row();
+    await show(ctx, t("announcements.edit_menu"), wizardBack(ctx, keyboard));
+  }
+  async function goBack(ctx: Ctx) {
+    const w = ctx.wizard;
+    if (w.support) {
+      delete w.support;
+      await ctx.reply(t("support.closed"), { reply_markup: mainKeyboard() }); return;
+    }
+    if (w.clockManual && ["window_start", "window_end", "window", "edit_window"].includes(w.step ?? "")) {
+      await askClock(ctx, w.step === "window_end" ? "end" : "start"); return;
+    }
+    if (w.step === "window_end") { await askClock(ctx, "start"); return; }
+    if (w.editId && w.table === "announcements") {
+      if (w.step === "edit_menu") { await showCard(ctx, "announcements", w.editId); ctx.wizard = {}; }
+      else await editMenu(ctx, w.editId);
+      return;
+    }
+    if (w.kind) {
+      switch (w.step) {
+        case "template_picker": case "photos": case "caption": case "groups": await askContent(ctx); return;
+        case "interval": await askGroups(ctx); return;
+        case "window": case "window_start": await askInterval(ctx); return;
+        case "first_run": await askClock(ctx, w.send_start_minute != null && w.send_end_minute != null ? "end" : "start"); return;
+        case "save_template": await askFirstRun(ctx); return;
+        case "confirm":
+          if ((w.confirmationBack === "template" || (!w.confirmationBack && w.fromTemplate)) && w.templateId) {
+            await showCard(ctx, "templates", w.templateId); ctx.wizard = {};
+          } else if (w.confirmationBack === "save_template" || (!w.confirmationBack && w.kind === "announcement" && !w.fromTemplate)) await askSaveTemplate(ctx);
+          else await askFirstRun(ctx);
+          return;
+        case "content":
+          w.step = "draft";
+          await listing(ctx, w.kind === "template" ? "templates" : "announcements"); return;
+      }
+    }
+    await ctx.reply(t("start.choose_section"), { reply_markup: mainKeyboard() });
+  }
 
   bot.command(["start", "boshlash"], async ctx => {
     ctx.wizard = {};
@@ -323,6 +427,8 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   bot.command("app", openGroupsApp);
   bot.command("guruh_ulash", async ctx => { ctx.wizard = {}; await listGroups(ctx); });
   bot.command("cancel", async ctx => { ctx.wizard = {}; await ctx.reply(t("common.cancel"), { reply_markup: mainKeyboard() }); });
+  bot.command("back", goBack);
+  bot.hears([...translations("common.back"), ...translations("common.back").map(label => `⬅️ ${label}`)], goBack);
   bot.command("statistika", async ctx => {
     if (!config.adminIds.includes(String(ctx.from!.id))) { await ctx.reply(t("common.access_denied")); return; }
     const counts = await one(ctx.db, `SELECT (SELECT count(*) FROM users) users,(SELECT count(*) FROM groups) groups,
@@ -331,7 +437,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     await ctx.reply(t("statistics.report", { ...counts, title: t("statistics.title") }));
   });
   for (const [key, table] of [["announcements", "announcements"], ["templates", "templates"]] as const) {
-    bot.hears(translations(`menu.${key}`), async ctx => { ctx.wizard = {}; await listing(ctx, table); });
+    bot.hears(translations(`menu.${key}`), async ctx => { if (ctx.wizard.step !== "draft") ctx.wizard = {}; await listing(ctx, table); });
   }
   bot.hears(translations("menu.groups"), async ctx => {
     ctx.wizard = {};
@@ -345,11 +451,20 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   bot.hears(translations("menu.help"), helpMenu);
 
   bot.on("callback_query:data", async ctx => {
+    if (ctx.callbackQuery.data.startsWith("wizard:back:")) {
+      if (ctx.callbackQuery.data.slice("wizard:back:".length) !== ctx.wizard.step) { await ctx.reply(t("common.not_found")); return; }
+      await goBack(ctx); return;
+    }
+    if (ctx.callbackQuery.data === "wizard:resume") {
+      if (!ctx.wizard.kind || ctx.wizard.step !== "draft") throw new Failure("NOT_FOUND");
+      await askContent(ctx); return;
+    }
     if (ctx.callbackQuery.data === "settings:open") { await settingsMenu(ctx); return; }
     if (ctx.callbackQuery.data === "settings:account") { await accountMenu(ctx); return; }
     if (ctx.callbackQuery.data === "settings:tariff") { await tariffMenu(ctx); return; }
     if (ctx.callbackQuery.data === "settings:language") { await languageMenu(ctx); return; }
     if (ctx.callbackQuery.data === "menu:main") {
+      delete ctx.wizard.support;
       await ctx.reply(t("start.choose_section"), { reply_markup: mainKeyboard() }); return;
     }
     if (ctx.callbackQuery.data.startsWith("language:")) {
@@ -433,11 +548,11 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     }
     if (["ann", "templates"].includes(p[0])) {
       const table = p[0] === "ann" ? "announcements" : "templates";
-      if (p[1] === "list") { ctx.wizard = {}; await listing(ctx, table); return; }
+      if (p[1] === "list") { if (w.step !== "draft") ctx.wizard = {}; await listing(ctx, table); return; }
       if (["create", "create_text", "create_photo"].includes(p[1]) && p.length === 2) {
         if (table === "announcements") { await requireCreationAccess(ctx.db, ctx.userId); await accounts.params(ctx.db, ctx.userId); }
-        ctx.wizard = { kind: table === "templates" ? "template" : "announcement", step: "content", photos: [] };
-        await show(ctx, t("announcements.create_instruction"), table === "announcements" ? button("announcements.from_template", "ann:create:template") : undefined); return;
+        ctx.wizard = { kind: table === "templates" ? "template" : "announcement", step: "content", photoMessageIds: [] };
+        await askContent(ctx); return;
       }
       if (p[1] === "show") { await showCard(ctx, table, id); ctx.wizard = {}; return; }
       if (table === "templates" && p[1] === "use") { await useTemplate(ctx, id); return; }
@@ -453,9 +568,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         await ctx.reply(t("templates.deleted")); await listing(ctx, table); return;
       }
       if (p[1] === "edit" && table === "announcements") {
-        await owned(ctx, table, id); const keyboard = new InlineKeyboard();
-        for (const field of ["text", "photo", "contact", "name", "groups", "interval", "window"]) keyboard.text(t(`announcements.edit_${field}`), `ann:edit_${field}:${id}`).row();
-        await show(ctx, t("announcements.edit_menu"), keyboard); return;
+        await editMenu(ctx, id); return;
       }
       if (p[1]?.startsWith("edit_")) {
         if (table === "templates") throw new Failure("NOT_FOUND");
@@ -467,21 +580,42 @@ export function createBot(config: Config, database: Database, accounts: Accounts
           await askGroups(ctx);
         } else if (field === "interval") await askInterval(ctx);
         else if (field === "window") await askWindow(ctx);
-        else await show(ctx, t(`announcements.${field === "photo" ? "send_ready_photo" : `send_${field}`}`));
+        else await show(ctx, t(`announcements.${field === "photo" ? "send_ready_photo" : `send_${field}`}`), wizardBack(ctx));
         void record; return;
       }
+      if (p[1] === "photos_done" && w.step === "edit_photo" && w.editId && w.table === "announcements") {
+        if (!w.photoMessageIds?.length || w.photoMessageIds.length > maxAnnouncementPhotos) throw new Failure("INVALID_CONTENT");
+        await lockUser(ctx.db, ctx.userId);
+        const record = await owned(ctx, "announcements", w.editId);
+        if (record.status === "deleted") throw new Failure("NOT_FOUND");
+        if (record.status === "paused") {
+          await requireCreationAccess(ctx.db, ctx.userId);
+          const count = await one(ctx.db, "SELECT count(*)::int n FROM announcements WHERE user_id=$1 AND status='active'", [ctx.userId]);
+          if (count.n >= config.maxAnnouncements) throw new Failure("ANNOUNCEMENT_LIMIT");
+        }
+        await ctx.db.query(`UPDATE announcements SET photo_file_id=NULL,photo_file_ids='[]',photo_message_ids=$3,
+          text=COALESCE($4,text),status='active',updated_at=now() WHERE id=$1 AND user_id=$2`,
+          [w.editId, ctx.userId, JSON.stringify(w.photoMessageIds), w.text ?? null]);
+        const editId = w.editId; ctx.wizard = {};
+        await ctx.reply(t("templates.updated")); await showCard(ctx, "announcements", editId); return;
+      }
       if (p[1] === "photos_done" && ["photos", "caption"].includes(w.step ?? "")) {
-        if (!w.text || !w.photos?.length) throw new Failure("INVALID_CONTENT");
+        if (!w.text || !draftPhotoCount(w)) throw new Failure("INVALID_CONTENT");
         await finishContent(ctx); return;
       }
     }
+    if (data === "ann:content_done" && w.kind && w.step === "content") {
+      if (!w.text) throw new Failure("INVALID_CONTENT");
+      await finishContent(ctx); return;
+    }
     if (data === "ann:create:template" && w.kind === "announcement" && w.step === "content") {
+      w.step = "template_picker";
       const templates = (await ctx.db.query("SELECT id,text FROM templates WHERE user_id=$1 ORDER BY updated_at DESC", [ctx.userId])).rows;
       const keyboard = new InlineKeyboard();
       for (const row of templates) keyboard.text(row.text.slice(0, 40), `ann:template:${row.id}`).row();
-      await show(ctx, t(templates.length ? "announcements.from_template" : "templates.empty"), keyboard); return;
+      await show(ctx, t(templates.length ? "announcements.from_template" : "templates.empty"), wizardBack(ctx, keyboard)); return;
     }
-    if (p[0] === "ann" && p[1] === "template" && w.kind === "announcement" && w.step === "content") {
+    if (p[0] === "ann" && p[1] === "template" && w.kind === "announcement" && ["content", "template_picker"].includes(w.step ?? "")) {
       await useTemplate(ctx, id); return;
     }
     if (p[0] === "ann" && p[1] === "groups_page" && ["groups", "edit_groups"].includes(w.step ?? "")) {
@@ -516,12 +650,12 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     if (p[0] === "ann" && p[1] === "clock" && ["window_start", "window_end"].includes(w.step ?? "")) {
       if (p[2] === "back") { await askClock(ctx, "start"); return; }
       if (w.step !== `window_${p[2]}`) throw new Failure("NOT_FOUND");
-      if (p[3] === "manual") { await show(ctx, t("announcements.clock_input"), button("announcements.window_all", "ann:window:all")); return; }
+      if (p[3] === "manual") { w.clockManual = true; await show(ctx, t("announcements.clock_input"), wizardBack(ctx, button("announcements.window_all", "ann:window:all"))); return; }
       if (!/^\d{1,4}$/.test(p[3] ?? "")) throw new Failure("INVALID_SENDING_WINDOW");
       await chooseClock(ctx, Number(p[3])); return;
     }
     if (p[0] === "ann" && p[1] === "window" && ["window", "edit_window", "window_start", "window_end"].includes(w.step ?? "")) {
-      if (p[2] === "custom") { await show(ctx, t("announcements.window_input"), button("announcements.window_all", "ann:window:all")); return; }
+      if (p[2] === "custom") { w.clockManual = true; await show(ctx, t("announcements.window_input"), wizardBack(ctx, button("announcements.window_all", "ann:window:all"))); return; }
       if (p[2] === "all") await saveWindow(ctx, { send_start_minute: null, send_end_minute: null });
       else {
         if (p.length !== 4 || !/^\d{1,4}$/.test(p[2]) || !/^\d{1,4}$/.test(p[3])) throw new Failure("INVALID_SENDING_WINDOW");
@@ -537,10 +671,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     if (p[0] === "ann" && p[1] === "first" && w.step === "first_run" && ["immediate", "scheduled"].includes(p[2])) {
       w.mode = p[2];
       if (w.kind === "template" || w.fromTemplate || w.saveTemplate !== undefined) await showConfirmation(ctx);
-      else {
-        w.step = "save_template";
-        await show(ctx, t("announcements.save_template"), confirm("ann:save_template:yes", "ann:save_template:no"));
-      }
+      else await askSaveTemplate(ctx);
       return;
     }
     if (data === "ann:cancel") { ctx.wizard = {}; await show(ctx, t("common.cancel")); return; }
@@ -552,10 +683,11 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       if (!validSendingWindow(w)) throw new Failure("INVALID_SENDING_WINDOW");
       validateContent(w);
       await requireCreationAccess(ctx.db, ctx.userId, true);
+      await draftSources(ctx);
       const next = nextSendingTime(new Date(Date.now() + (w.mode === "immediate" ? 0 : w.interval! * 60_000)), w);
-      const announcement = await one(ctx.db, `INSERT INTO announcements(user_id,text,photo_file_id,photo_file_ids,interval_minutes,first_run_mode,next_run_at,send_start_minute,send_end_minute,contact_phone,contact_telegram,contact_name)
-        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) RETURNING id`, [ctx.userId, w.text, w.photos?.[0] ?? null, JSON.stringify(w.photos ?? []), w.interval, w.mode,
-        next, w.send_start_minute ?? null, w.send_end_minute ?? null, w.contact_phone ?? null, w.contact_telegram ?? null, w.contact_name ?? null]);
+      const announcement = await one(ctx.db, `INSERT INTO announcements(user_id,text,photo_file_id,photo_file_ids,interval_minutes,first_run_mode,next_run_at,send_start_minute,send_end_minute,contact_phone,contact_telegram,contact_name,photo_message_ids)
+        VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) RETURNING id`, [ctx.userId, w.text, null, JSON.stringify([]), w.interval, w.mode,
+        next, w.send_start_minute ?? null, w.send_end_minute ?? null, w.contact_phone ?? null, w.contact_telegram ?? null, w.contact_name ?? null, JSON.stringify(w.photoMessageIds ?? [])]);
       for (const group of w.groups!) await ctx.db.query("INSERT INTO announcement_groups(announcement_id,group_id) VALUES($1,$2)", [announcement.id, group]);
       if (w.saveTemplate && !w.fromTemplate) await saveTemplate(ctx);
       ctx.sendNow = w.mode === "immediate"; ctx.wizard = {};
@@ -627,9 +759,9 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       await owned(ctx, w.table, w.editId);
       const field = w.step.slice(5);
       if (field === "photo" && message.photo) {
-        const photo = message.photo.at(-1)!.file_id;
-        await ctx.db.query(`UPDATE ${w.table} SET photo_file_id=$3,photo_file_ids=$4,text=COALESCE($5,text),updated_at=now() WHERE id=$1 AND user_id=$2`,
-          [w.editId, ctx.userId, photo, JSON.stringify([photo]), message.caption ?? null]);
+        if (!await acceptPhoto(ctx)) return;
+        if (!w.text && message.caption) w.text = message.caption;
+        await ctx.reply(t("announcements.photos_continue"), { reply_markup: wizardBack(ctx, button("common.done", "ann:photos_done")) }); return;
       } else if (["text", "contact", "name"].includes(field) && message.text && message.text.length <= (field === "text" ? 4096 : 255)) {
         if (field === "contact") {
           const isTelegram = message.text.startsWith("@") || message.text.includes("t.me/");
@@ -641,18 +773,16 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     }
     if (w.kind && ["content", "photos", "caption"].includes(w.step ?? "")) {
       if (message.photo) {
-        w.photos ??= [];
-        if (w.photos.length >= 4) { await ctx.reply(t("announcements.photo_limit")); return; }
-        w.photos.push(message.photo.at(-1)!.file_id);
+        if (!await acceptPhoto(ctx)) return;
         if (!w.text && message.caption) w.text = message.caption;
         w.step = w.text ? "photos" : "caption";
         await ctx.reply(t(w.text ? "announcements.photos_continue" : "announcements.photo_without_caption"),
-          { reply_markup: button("common.done", `${w.kind === "template" ? "templates" : "ann"}:photos_done`) }); return;
+          { reply_markup: wizardBack(ctx, button("common.done", `${w.kind === "template" ? "templates" : "ann"}:photos_done`)) }); return;
       }
       if (message.text && message.text.length <= 4096) {
         w.text = message.text;
-        if (w.photos?.length) {
-          w.step = "photos"; await ctx.reply(t("announcements.photos_continue"), { reply_markup: button("common.done", `${w.kind === "template" ? "templates" : "ann"}:photos_done`) });
+        if (draftPhotoCount(w)) {
+          w.step = "photos"; await ctx.reply(t("announcements.photos_continue"), { reply_markup: wizardBack(ctx, button("common.done", `${w.kind === "template" ? "templates" : "ann"}:photos_done`)) });
         } else await finishContent(ctx);
         return;
       }

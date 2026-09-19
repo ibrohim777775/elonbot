@@ -18,14 +18,14 @@ import { TelegramService } from "./telegram";
 async function main() {
   const config = loadConfig();
   const database = new Postgres(config);
-  const telegram = new TelegramService({ apiId: config.apiId, apiHash: config.apiHash });
+  const telegram = new TelegramService({ apiId: config.apiId, apiHash: config.apiHash, botToken: config.botToken });
   const accounts = new Accounts(config, telegram);
   const api = new Api(config.botToken);
   const delivery = new Delivery(database, config, accounts, api);
   const groups = new Groups(accounts);
   const support = new Support(database, config, api);
   const bot = createBot(config, database, accounts, groups, delivery, support);
-  const admin = new Admin(config, database, support, api);
+  const admin = new Admin(config, database, support, api, telegram);
   const mini = new MiniApp(config, database, groups);
   let ready = false;
   const server = createHttpServer(config, database, accounts, update => bot.handleUpdate(update), () => ready, mini, admin);

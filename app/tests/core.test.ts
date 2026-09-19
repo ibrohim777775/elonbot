@@ -52,7 +52,8 @@ test("migration is repeatable and preserves users, albums, schedules and prior b
     assert.equal((await one(database, "SELECT trial_started_at FROM users WHERE id=1")).trial_started_at.getTime(), trial.trial_started_at.getTime());
     assert.equal((await one(database, "SELECT count(*)::int n FROM users")).n, 2);
     assert.deepEqual((await one(database, "SELECT photo_file_ids FROM templates")).photo_file_ids, ["one", "two"]);
-    assert.equal((await one(database, "SELECT count(*)::int n FROM schema_migrations")).n, 7);
+    assert.equal((await one(database, "SELECT count(*)::int n FROM schema_migrations")).n, 8);
+    assert.deepEqual((await one(database, "SELECT photo_message_ids FROM templates")).photo_message_ids, []);
     assert.equal((await one(database, "SELECT interval_minutes FROM templates")).interval_minutes, null);
     assert.equal((await one(database, "SELECT count(*)::int n FROM telegram_group_cache")).n, 0);
     assert.equal((await one(database, "SELECT count(*)::int n FROM telegram_accounts")).n, 2);

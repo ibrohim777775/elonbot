@@ -29,6 +29,7 @@ export async function testDatabase() {
   await pg.exec(await readFile("migrations/005_user_language.sql", "utf8"));
   await pg.exec(await readFile("migrations/006_template_settings.sql", "utf8"));
   await pg.exec(await readFile("migrations/007_admin_browser_broadcasts.sql", "utf8"));
+  await pg.exec(await readFile("migrations/008_photo_message_sources.sql", "utf8"));
   const database: Database = { ...adapter(pg), transaction: fn => pg.transaction(tx => fn(adapter(tx))) };
   return { pg, database };
 }

@@ -15,6 +15,7 @@ async function botHarness(database: Database) {
     bot.api.config.use(async (_previous, method, payload: any) => {
       sent.push({ method, ...payload });
       if (method === "getMe") return { ok: true, result: { id: 123456789, is_bot: true, first_name: "Bot" } } as any;
+      if (method === "sendMediaGroup") return { ok: true, result: payload.media.map((_: any, i: number) => ({ message_id: 5000 + i })) } as any;
       return { ok: true, result: { message_id: sent.length, date: 0, chat: { id: payload.chat_id ?? 101, type: "private" }, text: payload.text ?? "" } } as any;
     });
     await bot.init(); return bot;
@@ -44,7 +45,7 @@ test("large group lists paginate; creation and editing allow 30 recipients but r
     const seen: string[] = [];
     for (let page = 0; page < Math.ceil(ids.length / 20); page++) {
       await h.callback(`groups:list_page:${page}`);
-      assert.ok(actions().length <= 23);
+      assert.ok(actions().length <= 24);
       seen.push(...actions().filter((a: string) => a.startsWith("groups:show:")).map((a: string) => a.split(":")[2]));
     }
     assert.equal(new Set(seen).size, ids.length);
@@ -176,7 +177,9 @@ test("legacy templates supply content for a new announcement without changing th
     assert.equal((await one(database, "SELECT trial_started_at FROM users WHERE id=1")).trial_started_at, null);
     await h.callback("ann:confirm");
     const ad = await one(database, "SELECT * FROM announcements");
-    assert.deepEqual(ad.photo_file_ids, template.photo_file_ids); assert.equal(ad.contact_telegram, "@legacy_contact");
+    assert.deepEqual(ad.photo_file_ids, []); assert.equal(ad.photo_file_id, null); assert.deepEqual(ad.photo_message_ids, [5000, 5001]);
+    assert.deepEqual(h.sent.find(s => s.method === "sendMediaGroup").media.map((m: any) => m.media), ["old-1", "old-2"]);
+    assert.equal(ad.contact_telegram, "@legacy_contact");
     assert.equal(ad.first_run_mode, "scheduled"); assert.equal(ad.interval_minutes, 60); assert.equal(ad.send_start_minute, null);
     assert.deepEqual(await one(database, "SELECT * FROM templates WHERE id=$1", [legacy.id]), template);
     assert.ok(ad.next_run_at.getTime() >= Date.now() + 59 * 60_000);

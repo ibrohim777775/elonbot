@@ -7,6 +7,8 @@ import { t, languageOf } from "./i18n";
 import { logError } from "./log";
 import { nextSendingTime, sendingDeadline } from "./schedule";
 import { planState } from "./billing";
+import { photosOf, photoMessageIds, photoCount } from "./media";
+export { photosOf } from "./media";
 
 export function renderText(announcement: Record<string, any>) {
   const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
@@ -19,9 +21,6 @@ export function renderText(announcement: Record<string, any>) {
     parts.push(match ? `Telegram: <a href="https://t.me/${match[1]}">@${match[1]}</a>` : `Telegram: ${escape(contact)}`);
   }
   return parts.join("\n");
-}
-export function photosOf(record: Record<string, any>): string[] {
-  return record.photo_file_ids?.length ? record.photo_file_ids : record.photo_file_id ? [record.photo_file_id] : [];
 }
 export class Delivery {
   private running?: Promise<void>;
@@ -65,7 +64,9 @@ export class Delivery {
           WHERE ug.is_active AND ug.can_post ORDER BY g.id`, [a.id, a.user_id, this.config.maxGroupsPerAnnouncement])).rows;
         // Reuse the downloaded album for every target in this run; release it after the announcement.
         let photos: Promise<string[]> | undefined;
-        const loadPhotos = () => photos ??= this.downloadPhotos(photosOf(a));
+        const loadPhotos = () => photos ??= photoMessageIds(a).length
+          ? this.accounts.telegram.execute("photos.read", { ownerId: String(account.telegram_id), messageIds: photoMessageIds(a) })
+          : this.downloadPhotos(photosOf(a));
         let retry: Date | undefined;
         for (const group of groups) {
           if (Date.now() >= a.subscriptionBefore) { retry = new Date(Date.now() + 60_000); break; }
@@ -78,6 +79,7 @@ export class Delivery {
           if (limit) { retry = limit; break; }
           const result = await this.sendOne(db, a, group, cycle, log, loadPhotos);
           if (result) { retry = result; break; }
+          if (a.sourceMissing) break;
           if (!await one(db, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [a.user_id])) break;
         }
         await db.query(`UPDATE announcements SET last_run_at=now(),next_run_at=$2,
@@ -121,10 +123,10 @@ export class Delivery {
       const deadline = sendingDeadline(new Date(), a);
       if (Date.now() >= a.subscriptionBefore) throw new Failure("SUBSCRIPTION_EXPIRED");
       if (deadline !== undefined && Date.now() >= deadline) throw new Failure("OUTSIDE_SEND_WINDOW");
-      const photoCount = photosOf(a).length;
+      const count = photoCount(a);
       // Only the trailing text remains when Telegram already acknowledged all photos.
-      const photos = photoCount && (log.telegram_message_ids?.length ?? 0) >= photoCount
-        ? Array<string>(photoCount).fill("") : await loadPhotos();
+      const photos = count && (log.telegram_message_ids?.length ?? 0) >= count
+        ? Array<string>(count).fill("") : await loadPhotos();
       if (Date.now() >= a.subscriptionBefore) throw new Failure("SUBSCRIPTION_EXPIRED");
       if (deadline !== undefined && Date.now() >= deadline) throw new Failure("OUTSIDE_SEND_WINDOW");
       const sent = await this.accounts.telegram.execute("send", {
@@ -140,11 +142,17 @@ export class Delivery {
       const expired = failure.code === "SUBSCRIPTION_EXPIRED";
       if (!outsideWindow && !expired) logError("telegram_send_failed", failure);
       const ids = failure.messageIds.length ? failure.messageIds : log.telegram_message_ids ?? [];
-      const transient = expired || outsideWindow || failure.seconds > 0 || ["TELEGRAM_UNAVAILABLE", "SEND_RESULT_UNKNOWN"].includes(failure.code);
+      const transient = expired || outsideWindow || failure.seconds > 0 || ["TELEGRAM_UNAVAILABLE", "PHOTO_SOURCE_UNAVAILABLE", "SEND_RESULT_UNKNOWN"].includes(failure.code);
       await db.query(`UPDATE delivery_logs SET status=$2,error_code=$3::text,error_message=$3::text,telegram_message_ids=$4,
         telegram_message_id=$5,sent_at=CASE WHEN $6 THEN now() ELSE sent_at END WHERE id=$1`,
         [log.id, transient ? "rate_limited" : "failed", failure.code, JSON.stringify(ids), ids.at(-1) ?? null, ids.length > 0]);
-      if (authErrors.has(failure.code)) {
+      if (failure.code === "PHOTO_SOURCE_MISSING") {
+        a.sourceMissing = true;
+        await db.query("UPDATE announcements SET status='paused' WHERE id=$1", [a.id]);
+        await this.bot.sendMessage(params.expectedId, t("delivery.photo_source_missing", {}, a.language), {
+          reply_markup: { inline_keyboard: [[{ text: t("announcements.edit_photo", {}, a.language), callback_data: `ann:edit_photo:${a.id}` }]] },
+        }).catch(() => {});
+      } else if (authErrors.has(failure.code)) {
         await this.accounts.invalidate(db, String(a.user_id));
         await this.bot.sendMessage(params.expectedId, t("account.expired", {}, a.language)).catch(() => {});
       } else if (["CHAT_WRITE_FORBIDDEN", "USER_BANNED_IN_CHANNEL", "CHANNEL_PRIVATE", "CHAT_ADMIN_REQUIRED", "USER_NOT_PARTICIPANT"].includes(failure.code)) {

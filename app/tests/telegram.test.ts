@@ -71,16 +71,18 @@ test("raw album publication uses user sender, escaped caption and stable per-pho
       if (request instanceof Api.messages.UploadMedia) return new Api.MessageMediaPhoto({ photo: new Api.Photo({
         id: bigInt(uploaded), accessHash: bigInt(123), fileReference: Buffer.from("ref"), date: 0, sizes: [], dcId: 1,
       }) });
-      assert.ok(request instanceof Api.messages.SendMultiMedia); return updates([11, 12, 13, 14]);
+      assert.ok(request instanceof Api.messages.SendMultiMedia); return updates(Array.from({ length: 10 }, (_, i) => i + 11));
     },
   };
-  const params = { text: "A &amp; B", photos: Array(4).fill(Buffer.from("photo").toString("base64")), deliveryKey: "cycle" };
+  const params = { text: "A &amp; B", photos: Array(10).fill(Buffer.from("photo").toString("base64")), deliveryKey: "cycle" };
   const result = await (service as any).send(client, peer("-100123", "99"), params);
-  assert.deepEqual(result.messageIds, [11, 12, 13, 14]);
+  assert.deepEqual(result.messageIds, Array.from({ length: 10 }, (_, i) => i + 11));
   const album = requests.at(-1);
   assert.ok(album.sendAs instanceof Api.InputPeerSelf);
-  assert.deepEqual(album.multiMedia.map((m: any) => m.message), ["A & B", "", "", ""]);
-  assert.equal(new Set(album.multiMedia.map((m: any) => m.randomId.toString())).size, 4);
+  assert.deepEqual(album.multiMedia.map((m: any) => m.message), ["A & B", ...Array(9).fill("")]);
+  assert.equal(new Set(album.multiMedia.map((m: any) => m.randomId.toString())).size, 10);
+  await assert.rejects((service as any).send(client, peer("-100123", "99"), { ...params, photos: Array(11).fill("photo") }), { code: "TOO_MANY_PHOTOS" });
+  assert.equal(uploaded, 10);
 });
 test("long photo caption resumes only the text after a partial send", async () => {
   const service = new TelegramService({ apiId: 1, apiHash: "a".repeat(32) });

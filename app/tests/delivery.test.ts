@@ -204,15 +204,19 @@ test("resuming text after acknowledged photos does not download the album again"
   const { pg, database } = await testDatabase();
   try {
     await seed(database); const id = await announcement(database, "1", ["1"]);
-    await database.query("UPDATE announcements SET text=$2,photo_file_ids='[\"photo\"]' WHERE id=$1", [id, "A".repeat(1100)]);
+    const sources = Array.from({ length: 10 }, (_, i) => i + 100), sentIds = sources.map(id => id + 100);
+    await database.query("UPDATE announcements SET text=$2,photo_message_ids=$3 WHERE id=$1", [id, "A".repeat(1100), JSON.stringify(sources)]);
     await database.query(`INSERT INTO delivery_logs(announcement_id,group_id,scheduled_at,status,sender_telegram_id,telegram_message_ids)
-      SELECT id,1,next_run_at,'rate_limited',101,'[10]' FROM announcements WHERE id=$1`, [id]);
+      SELECT id,1,next_run_at,'rate_limited',101,$2 FROM announcements WHERE id=$1`, [id, JSON.stringify(sentIds)]);
     const calls: any[] = [];
-    const accounts = new Accounts(config, { async execute(_method, p) { calls.push(p); return { messageIds: [10, 11] }; } });
+    const accounts = new Accounts(config, { async execute(method, p) {
+      assert.equal(method, "send", "Already published photos must not be fetched from source messages again");
+      calls.push(p); return { messageIds: [...sentIds, 999] };
+    } });
     const delivery = new Delivery(database, config, accounts, {} as any);
     (delivery as any).downloadPhotos = async () => { throw new Error("Already published photos must not be downloaded"); };
     await delivery.run();
-    assert.equal(calls.length, 1); assert.deepEqual(calls[0].messageIds, [10]); assert.equal(calls[0].photos.length, 1);
+    assert.equal(calls.length, 1); assert.deepEqual(calls[0].messageIds, sentIds); assert.equal(calls[0].photos.length, 10);
     assert.equal((await one(database, "SELECT status FROM delivery_logs WHERE announcement_id=$1", [id])).status, "sent");
   } finally { await pg.close(); }
 });
