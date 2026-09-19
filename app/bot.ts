@@ -74,9 +74,12 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     await database.transaction(async db => {
       // Drafts remain serialized, but opening menus does not wait for uploads or sends.
       await db.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`elonbot:ui:${ctx.from!.id}`]);
-      const user = await one(db, `INSERT INTO users(telegram_id,username,first_name,language) VALUES($1,$2,$3,$4)
-        ON CONFLICT(telegram_id) DO UPDATE SET username=$2,first_name=$3,last_activity_at=now(),updated_at=now() RETURNING id,language`,
-        [String(ctx.from!.id), ctx.from!.username ?? null, ctx.from!.first_name, languageOf(ctx.from!.language_code)]);
+      // New users start in Uzbek; only the language selector changes their saved choice.
+      const profile = [String(ctx.from!.id), ctx.from!.username ?? null, ctx.from!.first_name];
+      const created = await one(db, `INSERT INTO users(telegram_id,username,first_name) VALUES($1,$2,$3)
+        ON CONFLICT(telegram_id) DO NOTHING RETURNING id,language`, profile);
+      const user = created ?? await one(db, `UPDATE users SET username=$2,first_name=$3,last_activity_at=now(),updated_at=now()
+        WHERE telegram_id=$1 RETURNING id,language`, profile);
       ctx.userId = String(user.id); ctx.db = db;
       const recorded = await db.query("INSERT INTO processed_updates(update_id) VALUES($1) ON CONFLICT DO NOTHING RETURNING update_id", [ctx.update.update_id]);
       if (!recorded.rows.length) return;
@@ -87,7 +90,10 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         ctx.wizard = ctx.wizard.support ? { support: true } : {};
       }
       await withLanguage(languageOf(user.language), async () => {
-      try { await next(); }
+      try {
+        if (created) await welcomeLanguage(ctx);
+        else await next();
+      }
       catch (error) {
         if (!(error instanceof Failure)) throw error;
         if (error.code === "SUBSCRIPTION_EXPIRED") { await tariffMenu(ctx); }
@@ -123,6 +129,12 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   async function languageMenu(ctx: Ctx) {
     await show(ctx, t("language.choose"), new InlineKeyboard().text("🇺🇿 O'zbekcha", "language:uz").text("🇷🇺 Русский", "language:ru")
       .row().text(t("common.back"), "settings:open"));
+  }
+  async function welcomeLanguage(ctx: Ctx) {
+    ctx.wizard = { step: "welcome_language" };
+    await show(ctx, `${t("start.welcome")}\n\n${t("language.first_choice")}`, new InlineKeyboard()
+      .text("🇺🇿 O'zbekcha davom etish", "welcome_language:uz").row()
+      .text("🇷🇺 Русский", "welcome_language:ru"));
   }
   async function helpMenu(ctx: Ctx) {
     await ctx.reply(t("help.prompt"), { reply_markup: new InlineKeyboard().webApp(t("menu.help"), helpUrl())
@@ -405,12 +417,19 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     await ctx.reply(t("start.choose_section"), { reply_markup: mainKeyboard() });
   }
 
-  bot.command(["start", "boshlash"], async ctx => {
+  async function showStart(ctx: Ctx) {
     ctx.wizard = {};
-    await ctx.reply(t("start.welcome"), { reply_markup: new InlineKeyboard().webApp(t("menu.help"), helpUrl()) });
+    await show(ctx, t("start.welcome"), new InlineKeyboard().webApp(t("menu.help"), helpUrl()));
     await ctx.reply(t("start.choose_section"), { reply_markup: mainKeyboard() });
     await ctx.api.setMyCommands(botCommands(currentLanguage(), config.adminIds.includes(String(ctx.from!.id))), { scope: { type: "chat", chat_id: ctx.from!.id } }).catch(error => logError("bot_commands_failed", error));
-    if (!await one(ctx.db, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [ctx.userId])) await accountMenu(ctx);
+    if (!await one(ctx.db, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [ctx.userId])) {
+      await ctx.reply(t("account.connect_prompt"), { reply_markup: button("account.connect", "account:connect")
+        .row().text(t("common.back"), "settings:open") });
+    }
+  }
+  bot.command(["start", "boshlash"], async ctx => {
+    if (ctx.wizard.step === "welcome_language") await welcomeLanguage(ctx);
+    else await showStart(ctx);
   });
   bot.command("account", accountMenu);
   bot.command("settings", settingsMenu);
@@ -467,12 +486,18 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       delete ctx.wizard.support;
       await ctx.reply(t("start.choose_section"), { reply_markup: mainKeyboard() }); return;
     }
-    if (ctx.callbackQuery.data.startsWith("language:")) {
-      const selected = ctx.callbackQuery.data.slice(9);
+    const welcomeChoice = ctx.callbackQuery.data.startsWith("welcome_language:");
+    if (ctx.callbackQuery.data.startsWith("language:") || welcomeChoice) {
+      if (welcomeChoice && ctx.wizard.step !== "welcome_language") throw new Failure("NOT_FOUND");
+      const selected = ctx.callbackQuery.data.split(":")[1];
       if (!languages.includes(selected as any)) throw new Failure("NOT_FOUND");
       const language = languageOf(selected);
       await ctx.db.query("UPDATE users SET language=$2,updated_at=now() WHERE id=$1", [ctx.userId, language]);
       changeLanguage(language);
+      if (ctx.wizard.step === "welcome_language") {
+        await ctx.api.setChatMenuButton({ chat_id: ctx.from.id, menu_button: { type: "web_app", text: t("app.open"), web_app: { url: `${config.baseUrl}/app` } } }).catch(error => logError("language_menu_failed", error));
+        await showStart(ctx); return;
+      }
       await show(ctx, t("language.choose"), new InlineKeyboard().text(`${language === "uz" ? "✅ " : ""}🇺🇿 O'zbekcha`, "language:uz").text(`${language === "ru" ? "✅ " : ""}🇷🇺 Русский`, "language:ru")
         .row().text(t("common.back"), "settings:open"));
       await ctx.reply(t("language.saved"), { reply_markup: mainKeyboard() });
@@ -738,6 +763,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
 
   bot.on("message", async ctx => {
     const message = ctx.message; const w = ctx.wizard;
+    if (w.step === "welcome_language") { await welcomeLanguage(ctx); return; }
     if (message.text?.startsWith("/")) { await ctx.reply(t("commands.unknown")); return; }
     if (w.support || await support.isReply(ctx.db, ctx.userId, message.reply_to_message?.message_id)) {
       const saved = await support.receive(ctx.db, ctx.userId, message);

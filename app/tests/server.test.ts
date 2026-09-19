@@ -24,7 +24,10 @@ test("HTTP login uses private no-store page and rejects invalid webhooks and req
     const page = await fetch(`${base}/account`);
     assert.equal(page.status, 200); assert.equal(page.headers.get("cache-control"), "no-store");
     assert.match(page.headers.get("content-security-policy")!, /frame-ancestors 'none'/);
-    assert.match(await page.text(), /Telegram akkauntingizni ulang/);
+    const loginHtml = await page.text();
+    assert.match(loginHtml, /<html lang="uz">/);
+    assert.match(loginHtml, /Telegram akkauntingizni ulang/);
+    assert.match(loginHtml, /data-language="uz"/); assert.match(loginHtml, /data-language="ru"/);
     const script = await fetch(`${base}/account-assets/account.js`);
     assert.match(await script.text(), /history.replaceState/);
     const bad = await fetch(`${base}/webhook/${config.webhookSecret}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ update_id: 1 }) });

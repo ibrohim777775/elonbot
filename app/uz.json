@@ -1,6 +1,7 @@
 {
   "language": {
     "choose": "Tilni tanlang / Выберите язык:",
+    "first_choice": "Bot hozir o'zbek tilida. O'zbekcha davom eting yoki rus tilini tanlang:",
     "saved": "O'zbek tili tanlandi. Qoralamangiz saqlandi; oldingi tugmalar orqali davom etishingiz mumkin.",
     "minutes": "{count} daqiqa"
   },

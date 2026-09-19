@@ -1,4 +1,7 @@
 #!/usr/bin/env bash
+# After committing and pushing changes, run on the server from any directory:
+#   sudo bash /home/deploy/update-elonbot.sh
+# If this script changes, pull and copy it to that path again (see README.md).
 set -Eeuo pipefail
 umask 077
 

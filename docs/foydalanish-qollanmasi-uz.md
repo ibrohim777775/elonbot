@@ -4,7 +4,7 @@ Elonbot e'lonlaringizni tanlagan Telegram guruhlaringizga avtomatik yuboradi. Xa
 
 **1. Botni oching**
 
-«Start» tugmasini bosing yoki /start deb yozing. Tilni o'zgartirish uchun «⚙️ Sozlamalar / Настройки» → «🌐 Язык / Til» → «🇺🇿 O'zbekcha» ni tanlang.
+«Start» tugmasini bosing yoki /start deb yozing. Birinchi murojaatda bot o'zbekcha salomlashadi: shu tilda qolish uchun «O'zbekcha davom etish», rus tiliga o'tish uchun «Русский» ni bosing. Tanlov saqlanadi va keyingi /start da qayta so'ralmaydi. Keyinroq tilni «⚙️ Sozlamalar / Настройки» → «🌐 Язык / Til» orqali o'zgartirish mumkin.
 
 Qo'llanma doim bot menyusidagi «📖 Qo'llanma» tugmasi va /help buyrug'i orqali ochiladi. Guruh qo'shish sahifasida ham «Qo'llanma» bo'limi bor.
 
@@ -13,6 +13,8 @@ Oldingi bosqichga qaytish uchun bot xabari ostidagi «⬅️ Orqaga» tugmasini 
 **2. Telegram akkauntingizni ulang**
 
 «⚙️ Sozlamalar» → «Telegram akkaunt» → «Akkauntni ulash» ni bosing va berilgan havolani oching.
+
+Kirish sahifasining yuqorisidagi «O'zbekcha / Русский» orqali tilni almashtirish mumkin. Kiritilgan ma'lumotlar va joriy bosqich yo'qolmaydi. Bu tugmalar faqat kirish sahifasining tilini o'zgartiradi, botdagi til sozlamasini emas.
 
 • Telefon raqamingizni mamlakat kodi bilan kiriting, masalan: +998...
 • Telegram yuborgan tasdiqlash kodini kiriting.

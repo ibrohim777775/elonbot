@@ -4,7 +4,7 @@
 
 Заменяйте SERVER_IP на IP сервера из панели хостинга, example.com — на купленный домен, а bot.example.com — на выбранный адрес бота. Например, для домена myelon.uz можно использовать bot.myelon.uz. Во всех настройках ниже должен быть один и тот же адрес.
 
-Шаги 1–8 защищают сервер. Шаг 9 подробно описывает установку самого бота с пустой базой, как вы выбрали: старые пользователи, объявления и Telegram-сессии не переносятся. В шагах 10–11 подключается домен и HTTPS, в шаге 12 запускается бот, в шаге 13 проверяется результат. Пароли, приватный SSH-ключ и файл .env никому не отправляйте.
+Шаги 1–8 защищают сервер. Шаг 9 подробно описывает установку самого бота с пустой базой, как вы выбрали: старые пользователи, объявления и Telegram-сессии не переносятся. В шагах 10–11 подключается домен и HTTPS, в шаге 12 запускается бот, в шаге 13 проверяется результат. Для последующих обновлений работающего бота используйте шаг 14. Пароли, приватный SSH-ключ и файл .env никому не отправляйте.
 
 **1. Узнайте версию Ubuntu и проверьте доступ**
 
@@ -415,7 +415,7 @@ git check-ignore .env
 Добавьте файлы актуального TypeScript-проекта:
 
 ```powershell
-git add .gitignore README.md app public migrations docs scripts/dev.mjs package.json package-lock.json tsconfig.json
+git add .gitignore .gitattributes README.md app public migrations docs scripts package.json package-lock.json tsconfig.json
 git diff --cached --stat
 git diff --cached --name-only
 git diff --cached --check
@@ -496,7 +496,7 @@ git clone --branch main git@github-elonbot:OWNER/elonbot.git elonbot-source
 cd "$HOME/elonbot-source"
 git log -1 --oneline
 git status --short
-ls app public migrations docs scripts/dev.mjs package.json package-lock.json tsconfig.json
+ls app public migrations docs scripts/dev.mjs scripts/update-server.sh package.json package-lock.json tsconfig.json
 ```
 
 В git log должен быть ожидаемый последний коммит, git status --short в свежей копии обычно ничего не выводит. Если папка elonbot-source уже существует, не удаляйте её и не клонируйте поверх. Сначала проверьте `git -C "$HOME/elonbot-source" remote -v` и `git -C "$HOME/elonbot-source" status --short`.
@@ -512,14 +512,14 @@ git -C "$HOME/elonbot-source" pull --ff-only
 Для первой установки подготовьте архив из скачанного коммита:
 
 ```bash
-git -C "$HOME/elonbot-source" archive --format=tar.gz --output="$HOME/elonbot-upload.tar.gz" HEAD app public migrations docs scripts/dev.mjs package.json package-lock.json tsconfig.json
+git -C "$HOME/elonbot-source" archive --format=tar.gz --output="$HOME/elonbot-upload.tar.gz" HEAD app public migrations docs scripts package.json package-lock.json tsconfig.json
 ```
 
 Продолжайте только при успешном завершении. Архив содержит перечисленные файлы из коммита. В него не включаются каталог .git, ключи, локальный .env, node_modules и старая база. Рабочая папка программы не получит SSH-ключ deploy. [Описание git archive](https://git-scm.com/docs/git-archive).
 
 **9.5.5. Установите скачанный проект в /opt/elonbot**
 
-Следующие команды — только для первой установки в папку, созданную в 9.3. Если бот уже работает из /opt/elonbot, не распаковывайте файлы поверх работающего процесса: для обновления сначала нужна резервная копия базы и остановка службы.
+Следующие команды — только для первой установки в папку, созданную в 9.3. Если бот уже работает из /opt/elonbot, используйте скрипт обновления из шага 14.
 
 На сервере:
 
@@ -872,3 +872,35 @@ sudo journalctl -u elonbot -n 80 --no-pager
 При ошибке сертификата проверьте A/AAAA, доступность 80/443 и ограничения CAA, если такие записи у домена заданы. При 502 проверьте состояние бота и локальный /health. Ошибка INVALID_ORIGIN в админке обычно означает несовпадение открытого адреса и WEBHOOK_BASE_URL.
 
 Не закрывайте весь сайт дополнительным экраном входа или CAPTCHA: Telegram должен обращаться к webhook. Для админки уже реализованы проверка ADMIN_IDS, подписанный вход из Telegram и одноразовые ссылки для браузера.
+
+**14. Обновляйте работающего бота одной командой**
+
+Перед каждым обновлением закоммитьте изменения на компьютере и отправьте их в репозиторий через `git push`. Несохранённые в коммите или не отправленные изменения сервер не получит. Используется текущая ветка серверного репозитория `/home/deploy/elonbot-source`.
+
+Один раз подготовьте скрипт. В SSH-подключении на сервере под пользователем `deploy` выполните:
+
+```bash
+cd /home/deploy/elonbot-source
+git pull --ff-only
+cp scripts/update-server.sh /home/deploy/update-elonbot.sh
+sudo bash /home/deploy/update-elonbot.sh
+```
+
+При следующих обновлениях запускайте только эту команду из любой папки на сервере:
+
+```bash
+sudo bash /home/deploy/update-elonbot.sh
+```
+
+Скрипт сам скачает изменения, установит зависимости и проверит TypeScript в отдельной папке, затем остановит сервис `elonbot`, заменит приложение в `/opt/elonbot` и запустит сервис. Существующий `.env` сохраняется; новые миграции применяются автоматически при запуске. После запуска скрипт проверяет локальный `/health`.
+
+Прежние файлы приложения остаются в `/opt/elonbot.backup-*`. Если новая версия не запускается или не проходит проверку готовности, скрипт возвращает прежние файлы и запускает сервис. Эта копия содержит файлы приложения, а не PostgreSQL; резервные копии базы настраиваются отдельно, как описано в шаге 8. Миграции БД при откате файлов не отменяются.
+
+Если изменился сам `scripts/update-server.sh`, повторите первый блок команд: так обновится и его копия в `/home/deploy/update-elonbot.sh`. Если скрипт сообщает о локальных изменениях в серверном репозитории, сохраните и разберите их перед повторным запуском.
+
+Для просмотра состояния и последних сообщений бота:
+
+```bash
+sudo systemctl status elonbot --no-pager
+sudo journalctl -u elonbot -n 50 --no-pager
+```

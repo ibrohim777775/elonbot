@@ -123,8 +123,29 @@ test("bot persists language across restarts, keeps drafts, handles both menu lan
     assert.equal(lastText().reply_markup.keyboard.flat().find((b: any) => b.text === uz.menu.help).web_app.url, config.baseUrl + "/help?lang=uz");
     assertMainMenu(uz);
     await message("Группы"); assert.equal(lastText().text, "Guruhlar");
-    await message("/start", 303); assert.equal(lastText().text, ru.account.connect_prompt);
+    const firstStart = messages.length;
+    await message("/start", 303);
+    assert.equal(lastText().text, `${uz.start.welcome}\n\n${uz.language.first_choice}`);
+    assert.equal(messages.slice(firstStart).filter(m => m.method === "sendMessage").length, 1);
+    assert.deepEqual(lastText().reply_markup.inline_keyboard.flat().map((b: any) => b.callback_data), ["welcome_language:uz", "welcome_language:ru"]);
+    assert.equal((await one(database, "SELECT language FROM users WHERE telegram_id=303")).language, "uz");
+    // The first-language choice survives a restart and then stops appearing on /start.
+    bot = await makeBot(); await callback("welcome_language:ru", 303);
+    assert.equal(lastText().text, ru.account.connect_prompt);
     assert.equal((await one(database, "SELECT language FROM users WHERE telegram_id=303")).language, "ru");
+    const repeatStart = messages.length;
+    await message("/start", 303);
+    assert.equal(messages.slice(repeatStart).find(m => m.method === "sendMessage").text, ru.start.welcome);
+    assert.ok(!messages.slice(repeatStart).some(m => m.reply_markup && JSON.stringify(m.reply_markup).includes("welcome_language:")));
+    await callback("welcome_language:uz", 303); // Old welcome buttons cannot change the saved choice again.
+    assert.equal((await one(database, "SELECT language FROM users WHERE telegram_id=303")).language, "ru");
+    await message("Salom", 404); // The first ordinary message also offers keeping Uzbek or switching.
+    assert.equal(lastText().text, `${uz.start.welcome}\n\n${uz.language.first_choice}`);
+    await callback("welcome_language:uz", 404); assert.equal(lastText().text, uz.account.connect_prompt);
+    await callback("account:connect", 404);
+    assert.match(lastText().reply_markup.inline_keyboard[0][0].url, /\/account#/);
+    await message("/start", 404); assert.equal(lastText().text, uz.account.connect_prompt);
+    assert.equal((await one(database, "SELECT language FROM users WHERE telegram_id=404")).language, "uz");
   } finally { await pg.close(); }
 });
 

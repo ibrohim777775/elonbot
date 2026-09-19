@@ -2,6 +2,12 @@
 * { box-sizing: border-box; }
 main { max-width: 480px; margin: 8vh auto; padding: 32px; background: white; border-radius: 20px; }
 .brand { font-weight: 700; color: #05759f; }
+.account-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+.account-header .brand { margin: 0; }
+.languages { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 12px; background: #edf4f7; }
+.languages button { width: auto; min-height: 44px; margin: 0; padding: 10px 12px; font-size: 14px; color: #365464; background: transparent; }
+.languages button[aria-pressed="true"] { color: white; background: #07658b; }
+button:focus-visible, input:focus-visible { outline: 3px solid #05759f; outline-offset: 3px; }
 h1 { font-size: 26px; line-height: 1.2; }
 p { line-height: 1.6; }
 label { display: block; margin-top: 24px; font-weight: 600; }
