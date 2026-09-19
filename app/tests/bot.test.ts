@@ -233,9 +233,9 @@ test("bot opens the group-only Mini App without Telegram requests and resumes th
     await mini.handle("POST", "/api/groups/connect", { id: 101, first_name: "User" }, { chatId: "-100789" });
     await callback("groups:continue");
     assert.equal(calls, 1);
-    assert.equal(sent.at(-1).text, t("announcements.select_groups"));
+    assert.equal(sent.at(-1).text, t("announcements.select_groups", { count: 1, limit: 30 }));
     assert.ok(sent.at(-1).reply_markup.inline_keyboard.flat().some((b: any) => b.text === "Group 789"));
-    assert.deepEqual((await one(database, "SELECT data FROM user_states WHERE user_id=1")).data, draft);
+    assert.deepEqual((await one(database, "SELECT data FROM user_states WHERE user_id=1")).data, { ...draft, groupPage: 0 });
     await database.query("UPDATE user_states SET data='{}' WHERE user_id=1");
     await callback("groups:continue"); assert.equal(sent.at(-1).text, t("groups.title"));
   } finally { await pg.close(); }

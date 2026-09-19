@@ -5,7 +5,33 @@ import { one } from "../db";
 import { Delivery } from "../delivery";
 import { Groups } from "../groups";
 import { Failure } from "../telegram";
-import { announcement, config, seed, testDatabase } from "./helpers";
+import { addGroups, announcement, config, seed, testDatabase } from "./helpers";
+
+test("delivery never exceeds 30 targets across retries, even for a legacy oversized announcement", async () => {
+  const { pg, database } = await testDatabase();
+  try {
+    await seed(database); const ids = await addGroups(database, 33);
+    const id = await announcement(database, "1", ids);
+    const sent: string[] = [];
+    const accounts = new Accounts(config, { async execute(_method, params) {
+      sent.push(params.chatId); return { messageIds: [sent.length] };
+    } });
+    const delivery = new Delivery(database, config, accounts, {} as any);
+    await delivery.run();
+    assert.equal(sent.length, 20); // The independent per-minute rate limit still applies.
+    assert.ok((await one(database, "SELECT delivery_cycle_at FROM announcements WHERE id=$1", [id])).delivery_cycle_at);
+    // Lost access in the first page must not replace that recipient with a 31st group after a retry.
+    await database.query("UPDATE user_groups SET can_post=false WHERE user_id=1 AND group_id=1");
+    await database.query("UPDATE delivery_logs SET sent_at=now()-interval '2 minutes' WHERE announcement_id=$1", [id]);
+    await database.query("UPDATE announcements SET next_run_at=now()-interval '1 second' WHERE id=$1", [id]);
+    await new Delivery(database, config, accounts, {} as any).run();
+    assert.equal(sent.length, 30); assert.equal(new Set(sent).size, 30);
+    const delivered = (await database.query("SELECT group_id FROM delivery_logs WHERE announcement_id=$1 AND status='sent' ORDER BY group_id", [id])).rows.map(g => String(g.group_id));
+    assert.deepEqual(delivered, ids.slice(0, 30));
+    assert.equal((await one(database, "SELECT delivery_cycle_at FROM announcements WHERE id=$1", [id])).delivery_cycle_at, null);
+    assert.equal((await one(database, "SELECT count(*)::int n FROM user_groups WHERE user_id=1")).n, 35);
+  } finally { await pg.close(); }
+});
 
 test("outside daily hours no messages or photos are requested; other announcements stay independent", async context => {
   const { pg, database } = await testDatabase();

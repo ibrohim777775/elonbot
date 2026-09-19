@@ -14,12 +14,21 @@ import { AdminAuth } from "./admin-auth";
 import { SendingWindow, formatMinute, nextSendingTime, parseClockTime, parseSendingWindow, validSendingWindow } from "./schedule";
 
 type Wizard = SendingWindow & { kind?: "announcement" | "template"; step?: string; text?: string; photos?: string[];
-  groups?: string[]; interval?: number; saveTemplate?: boolean; fromTemplate?: boolean; mode?: string;
+  groups?: string[]; groupPage?: number; interval?: number; saveTemplate?: boolean; fromTemplate?: boolean; mode?: string;
   templateId?: string; contact_phone?: string | null; contact_telegram?: string | null; contact_name?: string | null;
   editId?: string; table?: "announcements" | "templates"; candidates?: any[];
   candidatesCached?: boolean; candidatesRetryAt?: number; support?: boolean };
 type Ctx = Context & { db: Queryable; userId: string; wizard: Wizard; sendNow?: boolean; notifySupport?: boolean };
 const intervals = [5, 10, 15, 20, 60, 120, 180, 300, 480];
+const groupsPerPage = 20;
+const groupPage = (requested: number, count: number) => Number.isSafeInteger(requested)
+  ? Math.max(0, Math.min(requested, Math.ceil(count / groupsPerPage) - 1)) : 0;
+function groupNavigation(keyboard: InlineKeyboard, page: number, count: number, action: string) {
+  if (count <= groupsPerPage) return;
+  if (page > 0) keyboard.text("←", `${action}:${page - 1}`);
+  if ((page + 1) * groupsPerPage < count) keyboard.text("→", `${action}:${page + 1}`);
+  keyboard.row();
+}
 const button = (label: string, action: string) => new InlineKeyboard().text(t(label), action);
 const confirm = (action: string, back: string) => new InlineKeyboard().text(t("common.yes"), action).text(t("common.no"), back);
 const idAt = (parts: string[], index = 2) => /^\d+$/.test(parts[index] ?? "") ? parts[index] : "0";
@@ -79,13 +88,14 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         const key = error.code === "TEMPLATE_GROUPS_UNAVAILABLE" ? "templates.groups_unavailable" :
           error.code === "SUPPORT_CONTENT_REQUIRED" ? "support.content_required" :
           error.code === "LOGIN_REQUIRED" || error.code === "ALREADY_CONNECTED" ? "account.connect_prompt" :
-          ["GROUP_LIMIT", "ANNOUNCEMENT_LIMIT"].includes(error.code) ? "validation.limit_reached" :
+          error.code === "ANNOUNCEMENT_GROUP_LIMIT" ? "validation.announcement_group_limit" :
+          error.code === "ANNOUNCEMENT_LIMIT" ? "validation.limit_reached" :
           error.code === "INVALID_SENDING_WINDOW" ? "announcements.window_invalid" :
           authErrors.has(error.code) ? "account.expired" : error.code === "GROUPS_RATE_LIMITED" ? "groups.rate_limited" :
           error.seconds ? "common.rate_limited" :
           error.code === "CHAT_WRITE_FORBIDDEN" ? "groups.user_cannot_post" : error.code === "GROUP_REQUIRED" ? "validation.group_required" :
           error.code === "NOT_FOUND" ? "common.not_found" : "common.error";
-        await ctx.reply(t(key, { seconds: Math.ceil(error.seconds) }), { reply_markup:
+        await ctx.reply(t(key, { seconds: Math.ceil(error.seconds), limit: config.maxGroupsPerAnnouncement }), { reply_markup:
           error.code === "TEMPLATE_GROUPS_UNAVAILABLE" && ctx.wizard.templateId ? templateActions(ctx.wizard.templateId) : undefined });
         }
       }
@@ -134,10 +144,12 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     keyboard.text(t(`${table}.create`), `${prefix}:create`);
     await show(ctx, t(`${table}.${rows.length ? "title" : "empty"}`), keyboard);
   };
-  const listGroups = async (ctx: Ctx) => {
+  const listGroups = async (ctx: Ctx, requestedPage = 0) => {
     const rows = await groups.list(ctx.db, ctx.userId);
+    const page = groupPage(requestedPage, rows.length);
     const keyboard = new InlineKeyboard();
-    for (const row of rows) keyboard.text(`${row.can_post ? "" : "⚠️ "}${row.title.slice(0, 45)}`, `groups:show:${row.id}`).row();
+    for (const row of rows.slice(page * groupsPerPage, (page + 1) * groupsPerPage)) keyboard.text(`${row.can_post ? "" : "⚠️ "}${row.title.slice(0, 45)}`, `groups:show:${row.id}`).row();
+    groupNavigation(keyboard, page, rows.length, "groups:list_page");
     keyboard.text(t("groups.add"), "groups:add");
     await show(ctx, t(rows.length ? "groups.title" : "groups.empty"), keyboard);
   };
@@ -152,10 +164,12 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     if (!rows.length) { await show(ctx, t("announcements.no_groups"), button("groups.add", "groups:add")); return; }
     ctx.wizard.step = ctx.wizard.editId ? "edit_groups" : "groups";
     ctx.wizard.groups ??= [];
+    const page = ctx.wizard.groupPage = groupPage(ctx.wizard.groupPage ?? 0, rows.length);
     const keyboard = new InlineKeyboard();
-    for (const row of rows) keyboard.text(`${ctx.wizard.groups.includes(String(row.id)) ? "✅ " : ""}${row.title.slice(0, 40)}`, `ann:group:${row.id}`).row();
+    for (const row of rows.slice(page * groupsPerPage, (page + 1) * groupsPerPage)) keyboard.text(`${ctx.wizard.groups.includes(String(row.id)) ? "✅ " : ""}${row.title.slice(0, 40)}`, `ann:group:${row.id}`).row();
+    groupNavigation(keyboard, page, rows.length, "ann:groups_page");
     keyboard.text(t("common.done"), "ann:groups_done");
-    await show(ctx, t("announcements.select_groups"), keyboard);
+    await show(ctx, t("announcements.select_groups", { count: ctx.wizard.groups.length, limit: config.maxGroupsPerAnnouncement }), keyboard);
   };
   const askInterval = async (ctx: Ctx) => {
     ctx.wizard.step = ctx.wizard.editId ? "edit_interval" : "interval";
@@ -245,6 +259,10 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       await ctx.reply(t("templates.needs_settings")); await askGroups(ctx); return;
     }
     if (draft.groups!.some(g => !available.has(g))) { await show(ctx, t("templates.groups_unavailable"), templateActions(id)); return; }
+    if (draft.groups!.length > config.maxGroupsPerAnnouncement) {
+      await ctx.reply(t("validation.announcement_group_limit", { limit: config.maxGroupsPerAnnouncement }));
+      await askGroups(ctx); return;
+    }
     await showConfirmation(ctx);
   }
   function validateContent(w: Wizard) {
@@ -366,6 +384,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       await accounts.logout(ctx.db, ctx.userId); await show(ctx, t("account.disconnected"), button("common.back", "settings:account")); return;
     }
     if (data === "groups:list") { await listGroups(ctx); return; }
+    if (p[0] === "groups" && p[1] === "list_page") { await listGroups(ctx, Number(id)); return; }
     if (data === "groups:continue") {
       if (w.fromTemplate && w.templateId && settingsReady(w) && (!w.step || w.step === "confirm")) await useTemplate(ctx, w.templateId);
       else if ((w.kind && w.text) || (w.table === "announcements" && w.step === "edit_groups")) await askGroups(ctx); else await listGroups(ctx);
@@ -465,8 +484,12 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     if (p[0] === "ann" && p[1] === "template" && w.kind === "announcement" && w.step === "content") {
       await useTemplate(ctx, id); return;
     }
+    if (p[0] === "ann" && p[1] === "groups_page" && ["groups", "edit_groups"].includes(w.step ?? "")) {
+      w.groupPage = Number(id); await askGroups(ctx); return;
+    }
     if (p[0] === "ann" && p[1] === "group" && ["groups", "edit_groups"].includes(w.step ?? "")) {
       if (!(await groups.list(ctx.db, ctx.userId)).some(g => String(g.id) === id && g.can_post)) throw new Failure("NOT_FOUND");
+      if (!w.groups?.includes(id) && (w.groups?.length ?? 0) >= config.maxGroupsPerAnnouncement) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
       w.groups = w.groups?.includes(id) ? w.groups.filter(g => g !== id) : [...w.groups ?? [], id]; await askGroups(ctx); return;
     }
     if (data === "ann:groups_done" && ["groups", "edit_groups"].includes(w.step ?? "")) {
@@ -562,6 +585,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
 
   async function validateGroups(ctx: Ctx) {
     const selected = ctx.wizard.groups;
+    if ((selected?.length ?? 0) > config.maxGroupsPerAnnouncement) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
     const available = new Set((await groups.list(ctx.db, ctx.userId)).filter(g => g.can_post).map(g => String(g.id)));
     if (!selected?.length || selected.some(g => !available.has(g))) throw new Failure(ctx.wizard.fromTemplate ? "TEMPLATE_GROUPS_UNAVAILABLE" : "GROUP_REQUIRED");
   }

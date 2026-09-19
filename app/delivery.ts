@@ -57,9 +57,12 @@ export class Delivery {
         const cycle = a.delivery_cycle_at ?? a.next_run_at;
         // Keep the logical schedule identity stable while next_run_at backs off.
         await db.query("UPDATE announcements SET delivery_cycle_at=$2 WHERE id=$1", [a.id, cycle]);
-        const groups = (await db.query(`SELECT g.*,ug.access_hash,ug.retry_after FROM announcement_groups ag
+        // Bound the target set before permissions/retries so a resumed legacy cycle cannot add extra recipients.
+        const groups = (await db.query(`SELECT g.*,ug.access_hash,ug.retry_after FROM (
+          SELECT group_id FROM announcement_groups WHERE announcement_id=$1 ORDER BY group_id LIMIT $3
+        ) ag
           JOIN groups g ON g.id=ag.group_id JOIN user_groups ug ON ug.group_id=g.id AND ug.user_id=$2
-          WHERE ag.announcement_id=$1 AND ug.is_active AND ug.can_post ORDER BY g.id`, [a.id, a.user_id])).rows;
+          WHERE ug.is_active AND ug.can_post ORDER BY g.id`, [a.id, a.user_id, this.config.maxGroupsPerAnnouncement])).rows;
         // Reuse the downloaded album for every target in this run; release it after the announcement.
         let photos: Promise<string[]> | undefined;
         const loadPhotos = () => photos ??= this.downloadPhotos(photosOf(a));

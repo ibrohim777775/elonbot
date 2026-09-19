@@ -24,6 +24,8 @@ Bot bilan yozishayotgan akkauntingizni ulang. Kod va parolni chatga xabar qilib 
 
 Siz o'sha guruhga a'zo bo'lishingiz va unda xabar yozish huquqiga ega bo'lishingiz kerak. Botni guruhga qo'shish shart emas.
 
+Ulangan guruhlar soni cheklanmagan. Botdagi uzun ro'yxatlarni ← va → tugmalari bilan varaqlash mumkin.
+
 Guruh ko'rinmasa, unga Telegram orqali a'zo bo'ling, keyin «Ro'yxatni yangilash» ni bosing.
 
 Guruhlarni qo'shgach, «Botga qaytish», so'ng botdagi «Botda davom etish» ni bosing.
@@ -34,7 +36,7 @@ Guruhlarni qo'shgach, «Botga qaytish», so'ng botdagi «Botda davom etish» ni 
 
 E'lon matnini yuboring. Xohlasangiz, matn bilan birga rasm yuboring yoki boshqa chatdagi tayyor e'lonni shu botga yuboring. Jami 4 tagacha rasm qo'shish mumkin. Rasmlarni yuborib bo'lgach, «Tayyor» ni bosing.
 
-Keyin e'lon yuboriladigan guruhlarni tanlang. Tanlangan guruh yonida ✅ chiqadi. «Tayyor» ni bosing.
+Keyin bitta e'lon uchun ko'pi bilan 30 ta guruh tanlang. Tanlangan guruh yonida ✅, ro'yxat tepasida esa tanlangan guruhlar soni chiqadi. «Tayyor» ni bosing.
 
 5. Yuborish vaqtini belgilang
 

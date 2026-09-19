@@ -8,7 +8,7 @@ export const config: Config = {
   botToken: "123456789:test_token", databaseUrl: "postgresql://localhost/test", databaseSsl: false,
   baseUrl: "https://example.test", webhookSecret: "test_secret_123456789", apiId: 12345,
   apiHash: "a".repeat(32), encryptionKey: Buffer.alloc(32, 7), port: 8000,
-  adminIds: ["101"], maxMessages: 20, maxChatMessages: 1, maxAnnouncements: 10, maxGroups: 20, maxDaily: 500,
+  adminIds: ["101"], maxMessages: 20, maxChatMessages: 1, maxAnnouncements: 10, maxGroupsPerAnnouncement: 30, maxDaily: 500,
 };
 export function adapter(pg: PGlite | any): Queryable {
   return { async query(sql, values = []) {
@@ -50,4 +50,12 @@ export async function announcement(db: Queryable, userId = "1", groups = ["1", "
     VALUES($1,'Hello <world>',5,'immediate',now()-interval '1 second') RETURNING id`, [userId])).rows[0];
   for (const group of groups) await db.query("INSERT INTO announcement_groups(announcement_id,group_id) VALUES($1,$2)", [row.id, group]);
   return String(row.id);
+}
+export async function addGroups(db: Queryable, count: number) {
+  await db.query(`WITH added AS (
+    INSERT INTO groups(chat_id,title,chat_type)
+    SELECT -200000-n,'Group ' || lpad(n::text,3,'0'),'supergroup'::chat_type FROM generate_series(1,$1::int) n RETURNING id
+  ) INSERT INTO user_groups(user_id,group_id,connected_by_telegram_id,can_post,access_hash)
+    SELECT 1,id,101,true,'111' FROM added`, [count]);
+  return (await db.query("SELECT group_id FROM user_groups WHERE user_id=1 ORDER BY group_id")).rows.map(g => String(g.group_id));
 }

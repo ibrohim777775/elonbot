@@ -63,9 +63,6 @@ export class Groups {
   }
   async connect(db: Queryable, userId: string, group: AccountGroup) {
     if (!group.canPost) throw new Failure("CHAT_WRITE_FORBIDDEN");
-    const count = await one(db, "SELECT count(*)::int n FROM user_groups WHERE user_id=$1 AND is_active", [userId]);
-    const existing = await one(db, "SELECT ug.id FROM user_groups ug JOIN groups g ON g.id=ug.group_id WHERE ug.user_id=$1 AND g.chat_id=$2 AND ug.is_active", [userId, group.chatId]);
-    if (!existing && count.n >= this.accounts.config.maxGroups) throw new Failure("GROUP_LIMIT");
     const record = await one(db, `INSERT INTO groups(chat_id,title,chat_type) VALUES($1,$2,$3)
       ON CONFLICT(chat_id) DO UPDATE SET title=$2,verified_at=now() RETURNING id`, [group.chatId, group.title, group.chatType]);
     const owner = await one(db, "SELECT telegram_id FROM users WHERE id=$1", [userId]);
@@ -75,6 +72,6 @@ export class Groups {
   }
   list(db: Queryable, userId: string) {
     return db.query(`SELECT g.*,ug.can_post,ug.is_admin,ug.access_hash,ug.retry_after FROM groups g JOIN user_groups ug ON ug.group_id=g.id
-      WHERE ug.user_id=$1 AND ug.is_active ORDER BY g.title`, [userId]).then(r => r.rows);
+      WHERE ug.user_id=$1 AND ug.is_active ORDER BY g.title,g.id`, [userId]).then(r => r.rows);
   }
 }

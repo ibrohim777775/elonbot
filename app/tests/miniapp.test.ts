@@ -27,7 +27,7 @@ test("Mini App authenticates signed owner, rejects tampering, replay age and dup
 test("group-only HTTP API binds permissions to owner and keeps bot data intact", async () => {
   const { pg, database } = await testDatabase();
   let calls = 0;
-  const localConfig = { ...config, maxGroups: 3 };
+  const localConfig = { ...config, maxGroupsPerAnnouncement: 3 };
   const accounts = new Accounts(localConfig, { async execute(method, params) {
     assert.equal(method, "groups"); calls++;
     const ids = params.userId === "1" ? [123, 456, 789, 888, 999] : [123, 444];
@@ -52,6 +52,7 @@ test("group-only HTTP API binds permissions to owner and keeps bot data intact",
     assert.equal((await request("/api/state", undefined, 303)).body.error, "LOGIN_REQUIRED");
     const state = await request("/api/state");
     assert.equal(state.body.accountConnected, true); assert.equal(state.body.connected.length, 2); assert.equal(calls, 0);
+    assert.equal("limit" in state.body, false);
     const discovery = await request("/api/groups/discover", {});
     assert.equal(discovery.body.groups.length, 5);
     assert.ok(!JSON.stringify(discovery).includes("secret-hash")); assert.ok(!JSON.stringify(state).includes("session"));
@@ -59,7 +60,8 @@ test("group-only HTTP API binds permissions to owner and keeps bot data intact",
     assert.equal((await request("/api/groups/connect", { chatId: "-100888", canPost: true })).body.error, "CHAT_WRITE_FORBIDDEN");
     assert.equal((await request("/api/groups/connect", { chatId: "-100789" })).status, 200);
     assert.equal((await request("/api/groups/connect", { chatId: "-100789" })).status, 200);
-    assert.equal((await request("/api/groups/connect", { chatId: "-100999" })).body.error, "GROUP_LIMIT");
+    assert.equal((await request("/api/groups/connect", { chatId: "-100999" })).status, 200);
+    assert.equal((await request("/api/state")).body.connected.length, 4);
     assert.equal(calls, 1, "Adding groups must reuse the same Telegram list");
     assert.equal((await request("/api/state", undefined, 202)).body.connected.length, 1);
     assert.equal((await request("/api/groups/connect", { chatId: "-100789" }, 202)).status, 404);

@@ -14,6 +14,9 @@ test("configuration requires API data and a durable valid key; legacy DB URL acc
     SESSION_ENCRYPTION_KEY: config.encryptionKey.toString("base64"), WEBHOOK_BASE_URL: config.baseUrl, WEBHOOK_SECRET: config.webhookSecret, ADMIN_IDS: "101, 202" };
   assert.equal(loadConfig(env).databaseUrl, "postgresql://localhost/test");
   assert.deepEqual(loadConfig(env).adminIds, ["101", "202"]);
+  assert.equal(loadConfig({ ...env, MAX_GROUPS_PER_USER: "20" }).maxGroupsPerAnnouncement, 30);
+  assert.equal(loadConfig({ ...env, MAX_GROUPS_PER_ANNOUNCEMENT: "15" }).maxGroupsPerAnnouncement, 15);
+  assert.throws(() => loadConfig({ ...env, MAX_GROUPS_PER_ANNOUNCEMENT: "0" }));
   assert.throws(() => loadConfig({ ...env, TELEGRAM_API_ID: "" }));
   assert.throws(() => loadConfig({ ...env, SESSION_ENCRYPTION_KEY: "bad" }));
   assert.throws(() => loadConfig({ ...env, WEBHOOK_BASE_URL: "http://example.test" }));

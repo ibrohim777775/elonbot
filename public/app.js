@@ -6,7 +6,7 @@
   const toast = document.querySelector("#toast");
   const helpScreen = document.querySelector("#help-screen");
   let helpLanguage, helpRequest = 0;
-  const state = { connected: [], groups: [], limit: 20, query: "", shown: 40, loading: false, adding: null, retryAt: 0, loaded: false };
+  const state = { connected: [], groups: [], query: "", shown: 40, loading: false, adding: null, retryAt: 0, loaded: false };
   let language = tg?.initDataUnsafe?.user?.language_code?.startsWith("ru") ? "ru" : "uz";
   const pick = (uz, ru) => language === "ru" ? ru : uz;
   function localizeChrome() {
@@ -64,7 +64,7 @@
       LOGIN_REQUIRED: pick("Avval botdagi «Sozlamalar» → «Telegram akkaunt» bo'limida akkauntingizni ulang.", "Сначала подключите аккаунт в разделе «Настройки» → «Telegram-аккаунт» в боте."),
       AUTH_KEY_UNREGISTERED: pick("Telegram seansi tugadi. Bot orqali akkauntingizni qayta ulang.", "Сессия Telegram завершена. Подключите аккаунт заново через бот."),
       SESSION_REVOKED: pick("Telegram seansi tugadi. Bot orqali akkauntingizni qayta ulang.", "Сессия Telegram завершена. Подключите аккаунт заново через бот."),
-      CHAT_WRITE_FORBIDDEN: pick("Bu guruhga xabar yuborish huquqingiz yo'q.", "У вас нет права отправлять сообщения в эту группу."), GROUP_LIMIT: pick(`Eng ko'pi ${state.limit} ta guruh ulash mumkin. Guruhni o'chirish uchun botga qayting.`, `Можно подключить не больше ${state.limit} групп. Для удаления группы вернитесь в бот.`),
+      CHAT_WRITE_FORBIDDEN: pick("Bu guruhga xabar yuborish huquqingiz yo'q.", "У вас нет права отправлять сообщения в эту группу."),
       NOT_FOUND: pick("Guruh topilmadi. Ro'yxatni yangilang.", "Группа не найдена. Обновите список."), STARTING: pick("Server ishga tushmoqda. Birozdan so'ng qayta urinib ko'ring.", "Сервер запускается. Повторите немного позже."),
       NETWORK_ERROR: pick("Server bilan aloqa yo'q. Internetni tekshirib, qayta urinib ko'ring.", "Нет связи с сервером. Проверьте интернет и попробуйте снова."),
     };
@@ -110,7 +110,7 @@
       return `<article class="group"><span class="avatar" aria-hidden="true">${escape(initials.toLocaleUpperCase())}</span><div class="group-info"><h3>${escape(g.title)}</h3><p>${joined ? pick("Ulangan", "Подключена") : g.canPost ? pick("Xabar yuborish mumkin", "Можно отправлять сообщения") : pick("Yozish huquqi yo'q", "Нет права отправки")}</p></div><button class="connect ${joined ? "joined" : ""}" data-chat="${escape(g.chatId)}" aria-label="${escape(g.title)} — ${joined ? pick("Ulangan", "Подключена") : pick("Ulash", "Подключить")}" ${joined || !g.canPost || state.adding !== null ? "disabled" : ""}>${adding ? pick("Ulanmoqda…", "Подключаем…") : joined ? pick("✓ Ulangan", "✓ Подключена") : pick("Ulash", "Подключить")}</button></article>`;
     }).join("") || `<div class="list-empty">${state.loading ? `<span class="loader" aria-hidden="true"></span><p>${pick("Guruhlar yuklanmoqda…", "Загружаем группы…")}</p>` : query ? pick("Bu nom bilan guruh topilmadi.", "Группа с таким названием не найдена.") : state.loaded ? pick("Hozircha guruhlar topilmadi.", "Пока нет доступных групп.") : pick("Ro'yxatni yuklash uchun qayta urinib ko'ring.", "Попробуйте загрузить список ещё раз.")}</div>`;
     document.querySelector('[data-action="more"]').hidden = filtered.length <= state.shown;
-    document.querySelector("#connected-count").textContent = pick(`${state.connected.length} / ${state.limit} guruh ulangan`, `Подключено: ${state.connected.length} / ${state.limit}`);
+    document.querySelector("#connected-count").textContent = pick(`${state.connected.length} ta guruh ulangan`, `Подключено групп: ${state.connected.length}`);
   }
   function updateStatus() {
     const refresh = document.querySelector('[data-action="refresh"]'), notice = document.querySelector("#notice");
@@ -148,8 +148,8 @@
     try {
       const result = await api("/api/state");
       language = result.language === "ru" ? "ru" : "uz"; localizeChrome();
-      state.connected = result.connected; state.limit = result.limit;
-      footer.hidden = false; document.querySelector("#connected-count").textContent = pick(`${state.connected.length} / ${state.limit} guruh ulangan`, `Подключено: ${state.connected.length} / ${state.limit}`);
+      state.connected = result.connected;
+      footer.hidden = false; document.querySelector("#connected-count").textContent = pick(`${state.connected.length} ta guruh ulangan`, `Подключено групп: ${state.connected.length}`);
       if (!result.accountConnected) { gate(pick("Avval akkauntni ulang", "Сначала подключите аккаунт"), pick("Botga qayting: «Sozlamalar» → «Telegram akkaunt» → «Akkauntni ulash». Shundan so'ng guruhlarni qo'shishingiz mumkin.", "Вернитесь в бот: «Настройки» → «Telegram-аккаунт» → «Подключить аккаунт». После этого можно добавить группы.")); return; }
       render(); await discover();
     } catch (error) { gate(pick("Guruhlar ochilmadi", "Не удалось открыть группы"), errorText(error), true); }

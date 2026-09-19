@@ -66,7 +66,7 @@
     "send_contact": "Bog'lanish uchun telefon raqami yoki Telegram akkauntini yuboring.",
     "share_phone": "Telefon raqamimni yuborish",
     "send_name": "Murojaat uchun ismni yuboring yoki O'tkazib yuborish tugmasini bosing.",
-    "select_groups": "E'lon yuboriladigan guruhlarni tanlang.",
+    "select_groups": "E'lon yuboriladigan guruhlarni tanlang. Ko'pi bilan {limit} ta guruh.\nTanlangan: {count}/{limit}.",
     "select_interval": "Yuborish oralig'ini tanlang.",
     "select_window": "E'lon har kuni qaysi soatlarda yuborilsin?\nToshkent vaqti (UTC+5). Tugash vaqtida yangi yuborishlar to'xtaydi va keyingi ruxsat etilgan vaqtda davom etadi.",
     "window_start": "Qaysi vaqtdan boshlab yuborilsin?\nBoshlanish vaqtini tanlang yoki yozing (masalan, 07:30). Toshkent vaqti (UTC+5).",
@@ -153,7 +153,8 @@
   "validation": {
     "contact_required": "Telefon raqami yoki Telegram akkauntingizni kiriting.",
     "group_required": "Kamida bitta guruhni tanlang.",
-    "limit_reached": "Ruxsat etilgan limitga yetdingiz."
+    "limit_reached": "Ruxsat etilgan limitga yetdingiz.",
+    "announcement_group_limit": "Bitta e'lon uchun ko'pi bilan {limit} ta guruh tanlash mumkin. Ortiqcha guruhlar tanlovini bekor qiling. Guruhlarni ulash soni cheklanmagan."
   },
   "delivery": {
     "rate_limited": "Telegram limiti sabab yuborish keyinroq davom ettiriladi.",

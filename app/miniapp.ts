@@ -21,7 +21,7 @@ export class MiniApp {
         one(this.database, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [userId]),
         this.groups.list(this.database, userId),
       ]);
-      return { accountConnected: !!account, limit: this.config.maxGroups, language: user.language,
+      return { accountConnected: !!account, language: user.language,
         connected: connected.map(g => ({ chatId: String(g.chat_id), title: g.title })) };
     }
     const connecting = path === "/api/groups/connect";

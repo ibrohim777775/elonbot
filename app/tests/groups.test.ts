@@ -9,6 +9,22 @@ import { config, seed, testDatabase } from "./helpers";
 const candidate: AccountGroup = { chatId: "-100123", title: "First group", chatType: "supergroup",
   accessHash: "111", canPost: true, isAdmin: false };
 
+test("connecting and reconnecting groups stays unlimited beyond 30 recipients", async () => {
+  const { pg, database } = await testDatabase();
+  try {
+    await seed(database);
+    const accounts = new Accounts(config, { async execute() { throw new Error("No Telegram requests expected"); } });
+    const groups = new Groups(accounts);
+    for (let i = 0; i < 60; i++) await groups.connect(database, "1", { ...candidate, chatId: `-200${i}`, title: `Extra ${i}` });
+    await database.query("UPDATE user_groups SET is_active=false WHERE user_id=1 AND group_id=1");
+    await groups.connect(database, "1", candidate);
+    await groups.connect(database, "1", candidate);
+    assert.equal((await groups.list(database, "1")).length, 62);
+    assert.equal((await groups.list(database, "2")).length, 1);
+    await assert.rejects(groups.connect(database, "1", { ...candidate, chatId: "-99999", canPost: false }), { code: "CHAT_WRITE_FORBIDDEN" });
+  } finally { await pg.close(); }
+});
+
 test("group discovery batches hundreds of peers and reuses a per-account cache across restarts", async () => {
   const { pg, database } = await testDatabase();
   try {

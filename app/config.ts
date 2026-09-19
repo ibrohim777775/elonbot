@@ -31,7 +31,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
     maxMessages: number("MAX_MESSAGES_PER_MINUTE", 20),
     maxChatMessages: number("MAX_MESSAGES_PER_CHAT_PER_MINUTE", 1),
     maxAnnouncements: number("MAX_ACTIVE_ANNOUNCEMENTS_PER_USER", 10),
-    maxGroups: number("MAX_GROUPS_PER_USER", 20),
+    maxGroupsPerAnnouncement: number("MAX_GROUPS_PER_ANNOUNCEMENT", 30),
     maxDaily: number("MAX_DELIVERIES_PER_USER_PER_DAY", 500),
   };
 }

@@ -97,7 +97,7 @@ test("bot persists language across restarts, keeps drafts, handles both menu lan
     assert.equal(lastText().reply_markup.inline_keyboard[0][0].web_app.url, config.baseUrl + "/help?lang=ru");
     assert.deepEqual((await one(database, "SELECT data FROM user_states WHERE user_id=1")).data, draft);
     await message("Original announcement content");
-    assert.equal(lastText().text, ru.announcements.select_groups);
+    assert.equal(lastText().text, t("announcements.select_groups", { count: 0, limit: 30 }, "ru"));
     await callback("ann:group:1"); await callback("ann:groups_done");
     assert.equal(lastText().reply_markup.inline_keyboard[0][0].text, "5 мин.");
     await callback("ann:interval:5"); assert.equal(lastText().text, ru.announcements.window_start);
