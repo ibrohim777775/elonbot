@@ -8,20 +8,11 @@ import { logError } from "./log";
 import { nextSendingTime, sendingDeadline } from "./schedule";
 import { planState } from "./billing";
 import { photosOf, photoMessageIds, photoCount } from "./media";
+import { renderText, messageLength } from "./content";
+import { DeliverySummary } from "./announcement-state";
+import { enqueueNotification } from "./notifications";
 export { photosOf } from "./media";
-
-export function renderText(announcement: Record<string, any>) {
-  const escape = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  const parts = [escape(announcement.text)];
-  if (announcement.contact_name) parts.push(`\n${escape(announcement.contact_name)}`);
-  if (announcement.contact_phone) parts.push(`Tel: ${escape(announcement.contact_phone)}`);
-  if (announcement.contact_telegram) {
-    const contact = announcement.contact_telegram.trim();
-    const match = /^(?:@|(?:https?:\/\/)?t\.me\/)?([A-Za-z0-9_]{4,32})\/?$/.exec(contact);
-    parts.push(match ? `Telegram: <a href="https://t.me/${match[1]}">@${match[1]}</a>` : `Telegram: ${escape(contact)}`);
-  }
-  return parts.join("\n");
-}
+export { renderText } from "./content";
 export class Delivery {
   private running?: Promise<void>;
   constructor(readonly database: Database, readonly config: Config, readonly accounts: Accounts, readonly bot: BotApi) {}
@@ -56,12 +47,19 @@ export class Delivery {
         const cycle = a.delivery_cycle_at ?? a.next_run_at;
         // Keep the logical schedule identity stable while next_run_at backs off.
         await db.query("UPDATE announcements SET delivery_cycle_at=$2 WHERE id=$1", [a.id, cycle]);
-        // Bound the target set before permissions/retries so a resumed legacy cycle cannot add extra recipients.
-        const groups = (await db.query(`SELECT g.*,ug.access_hash,ug.retry_after FROM (
-          SELECT group_id FROM announcement_groups WHERE announcement_id=$1 ORDER BY group_id LIMIT $3
-        ) ag
-          JOIN groups g ON g.id=ag.group_id JOIN user_groups ug ON ug.group_id=g.id AND ug.user_id=$2
-          WHERE ug.is_active AND ug.can_post ORDER BY g.id`, [a.id, a.user_id, this.config.maxGroupsPerAnnouncement])).rows;
+        // Freeze recipients for the whole cycle, including groups with lost permissions.
+        if (!a.cycle_initialized) {
+          await db.query(`INSERT INTO delivery_logs(announcement_id,group_id,scheduled_at,status,sender_telegram_id)
+            SELECT $1,group_id,$2,'rate_limited',$3 FROM announcement_groups WHERE announcement_id=$1
+            ORDER BY group_id LIMIT $4 ON CONFLICT(announcement_id,group_id,scheduled_at) DO NOTHING`,
+            [a.id, cycle, account.telegram_id, this.config.maxGroupsPerAnnouncement]);
+          await db.query("UPDATE announcements SET cycle_initialized=true WHERE id=$1", [a.id]);
+        }
+        const groups = (await db.query(`SELECT g.*,ug.access_hash,ug.retry_after,
+          (ug.is_active AND ug.can_post AND ag.group_id IS NOT NULL) AS available FROM delivery_logs l
+          JOIN groups g ON g.id=l.group_id LEFT JOIN user_groups ug ON ug.group_id=g.id AND ug.user_id=$2
+          LEFT JOIN announcement_groups ag ON ag.announcement_id=l.announcement_id AND ag.group_id=g.id
+          WHERE l.announcement_id=$1 AND l.scheduled_at=$3 ORDER BY g.id`, [a.id, a.user_id, cycle])).rows;
         // Reuse the downloaded album for every target in this run; release it after the announcement.
         let photos: Promise<string[]> | undefined;
         const loadPhotos = () => photos ??= photoMessageIds(a).length
@@ -74,25 +72,57 @@ export class Delivery {
           if (allowed > now) { retry = allowed; break; }
           const log = await one(db, "SELECT * FROM delivery_logs WHERE announcement_id=$1 AND group_id=$2 AND scheduled_at=$3", [a.id, group.id, cycle]);
           if (log && ["sent", "failed", "skipped"].includes(log.status)) continue;
+          if (!group.available) {
+            await db.query("UPDATE delivery_logs SET status='skipped',error_code='GROUP_UNAVAILABLE' WHERE id=$1", [log.id]);
+            continue;
+          }
           if (group.retry_after && group.retry_after > new Date()) { retry = group.retry_after; continue; }
-          const limit = await this.rateLimit(db, String(account.telegram_id), group.id);
-          if (limit) { retry = limit; break; }
+          const limit = await this.rateLimit(db, String(account.telegram_id), String(group.chat_id));
+          if (limit) {
+            await db.query("UPDATE delivery_logs SET error_code=COALESCE(error_code,'LOCAL_RATE_LIMIT') WHERE id=$1", [log.id]);
+            retry = limit; continue;
+          }
           const result = await this.sendOne(db, a, group, cycle, log, loadPhotos);
           if (result) { retry = result; break; }
-          if (a.sourceMissing) break;
+          if (a.sourceMissing || a.invalidContent) break;
           if (!await one(db, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [a.user_id])) break;
         }
-        await db.query(`UPDATE announcements SET last_run_at=now(),next_run_at=$2,
-          delivery_cycle_at=$3,updated_at=now() WHERE id=$1`,
-          [a.id, nextSendingTime(retry ?? new Date(Date.now() + a.interval_minutes * 60_000), a), retry ? cycle : null]);
+        if (a.sourceMissing || a.invalidContent) await db.query(`UPDATE delivery_logs SET status='failed',error_code=$3
+          WHERE announcement_id=$1 AND scheduled_at=$2 AND status='rate_limited'`,
+          [a.id, cycle, a.sourceMissing ? "PHOTO_SOURCE_MISSING" : "MESSAGE_TOO_LONG"]);
+        const available = await one(db, `SELECT 1 FROM announcement_groups ag JOIN user_groups ug ON ug.group_id=ag.group_id
+          WHERE ag.announcement_id=$1 AND ug.user_id=$2 AND ug.is_active AND ug.can_post LIMIT 1`, [a.id, a.user_id]);
+        if (!available) await db.query("UPDATE announcements SET status='paused',pause_reason='no_groups' WHERE id=$1 AND status='active'", [a.id]);
+        const counts = await one(db, `SELECT count(*)::int total,
+          count(*) FILTER(WHERE status='sent')::int sent, count(*) FILTER(WHERE status='rate_limited')::int waiting,
+          count(*) FILTER(WHERE status='failed')::int failed, count(*) FILTER(WHERE status='skipped')::int unavailable,
+          count(*) FILTER(WHERE status='rate_limited' AND error_code IS NOT NULL AND error_code NOT IN ('LOCAL_RATE_LIMIT','OUTSIDE_SEND_WINDOW'))::int problems
+          FROM delivery_logs WHERE announcement_id=$1 AND scheduled_at=$2`, [a.id, cycle]);
+        const old: DeliverySummary | null = a.last_delivery_summary;
+        const summary: DeliverySummary = { cycle: cycle.toISOString(), total: counts.total, sent: counts.sent, waiting: counts.waiting,
+          failed: counts.failed, unavailable: counts.unavailable, updatedAt: new Date().toISOString(), complete: !counts.waiting,
+          firstCycle: !old || (old.cycle === cycle.toISOString() && old.firstCycle),
+          health: counts.failed || counts.unavailable || counts.problems || !available ? "attention" : "ok" };
+        // A pending cycle has not yet proved recovery from the previous failure.
+        if (old?.health === "attention" && summary.waiting) summary.health = "attention";
+        const phase = summary.complete ? "complete" : "progress";
+        if (summary.firstCycle || (old ? old.health !== summary.health : summary.health === "attention")) {
+          await enqueueNotification(db, String(a.user_id), `delivery:${a.id}:${summary.cycle}:${phase}:${summary.health}`,
+            "delivery_result", { announcementId: String(a.id), summary, recovered: old?.health === "attention" && summary.health === "ok" });
+        }
+        if (!summary.complete) retry ??= new Date(Date.now() + 60_000);
+        else retry = undefined;
+        await db.query(`UPDATE announcements SET last_run_at=now(),next_run_at=$2,delivery_cycle_at=$3,
+          cycle_initialized=$4,last_delivery_summary=$5,updated_at=now() WHERE id=$1`,
+          [a.id, nextSendingTime(retry ?? new Date(Date.now() + a.interval_minutes * 60_000), a),
+            summary.complete ? null : cycle, !summary.complete, JSON.stringify(summary)]);
       });
     }
   }
   private async rateLimit(db: Queryable, sender: string, groupId: string): Promise<Date | undefined> {
-    const counts = await one(db, `SELECT count(*) FILTER(WHERE sent_at>now()-interval '1 minute')::int AS minute,
-      count(*) FILTER(WHERE sent_at>now()-interval '1 minute' AND group_id=$2)::int AS chat,
-      count(*)::int AS daily FROM delivery_logs WHERE sender_telegram_id=$1 AND sent_at>now()-interval '1 day'`, [sender, groupId]);
-    if (counts.daily >= this.config.maxDaily) return new Date(Date.now() + 3600_000);
+    const counts = await one(db, `SELECT count(*)::int AS minute,
+      count(*) FILTER(WHERE chat_id=$2)::int AS chat
+      FROM delivery_usage WHERE sender_telegram_id=$1 AND sent_at>now()-interval '1 minute'`, [sender, groupId]);
     if (counts.minute >= this.config.maxMessages || counts.chat >= this.config.maxChatMessages) return new Date(Date.now() + 60_000);
   }
   private async downloadPhotos(ids: string[]) {
@@ -120,6 +150,7 @@ export class Delivery {
     const log = previous ?? await one(db, `INSERT INTO delivery_logs(announcement_id,group_id,scheduled_at,status,sender_telegram_id)
       VALUES($1,$2,$3,'rate_limited',$4) RETURNING *`, [a.id, group.id, cycle, params.expectedId]);
     try {
+      if (messageLength(a) > 4096) throw new Failure("MESSAGE_TOO_LONG");
       const deadline = sendingDeadline(new Date(), a);
       if (Date.now() >= a.subscriptionBefore) throw new Failure("SUBSCRIPTION_EXPIRED");
       if (deadline !== undefined && Date.now() >= deadline) throw new Failure("OUTSIDE_SEND_WINDOW");
@@ -145,13 +176,16 @@ export class Delivery {
       const transient = expired || outsideWindow || failure.seconds > 0 || ["TELEGRAM_UNAVAILABLE", "PHOTO_SOURCE_UNAVAILABLE", "SEND_RESULT_UNKNOWN"].includes(failure.code);
       await db.query(`UPDATE delivery_logs SET status=$2,error_code=$3::text,error_message=$3::text,telegram_message_ids=$4,
         telegram_message_id=$5,sent_at=CASE WHEN $6 THEN now() ELSE sent_at END WHERE id=$1`,
-        [log.id, transient ? "rate_limited" : "failed", failure.code, JSON.stringify(ids), ids.at(-1) ?? null, ids.length > 0]);
+        [log.id, transient ? "rate_limited" : "failed", failure.code, JSON.stringify(ids), ids.at(-1) ?? null, ids.length > (log.telegram_message_ids?.length ?? 0)]);
       if (failure.code === "PHOTO_SOURCE_MISSING") {
         a.sourceMissing = true;
-        await db.query("UPDATE announcements SET status='paused' WHERE id=$1", [a.id]);
+        await db.query("UPDATE announcements SET status='paused',pause_reason='photo_source_missing' WHERE id=$1", [a.id]);
         await this.bot.sendMessage(params.expectedId, t("delivery.photo_source_missing", {}, a.language), {
           reply_markup: { inline_keyboard: [[{ text: t("announcements.edit_photo", {}, a.language), callback_data: `ann:edit_photo:${a.id}` }]] },
         }).catch(() => {});
+      } else if (failure.code === "MESSAGE_TOO_LONG") {
+        a.invalidContent = true;
+        await db.query("UPDATE announcements SET status='paused',pause_reason='invalid_content' WHERE id=$1", [a.id]);
       } else if (authErrors.has(failure.code)) {
         await this.accounts.invalidate(db, String(a.user_id));
         await this.bot.sendMessage(params.expectedId, t("account.expired", {}, a.language)).catch(() => {});

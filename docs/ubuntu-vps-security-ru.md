@@ -597,11 +597,12 @@ MAX_MESSAGES_PER_MINUTE=20
 MAX_MESSAGES_PER_CHAT_PER_MINUTE=1
 MAX_ACTIVE_ANNOUNCEMENTS_PER_USER=10
 MAX_GROUPS_PER_ANNOUNCEMENT=30
-MAX_DELIVERIES_PER_USER_PER_DAY=500
 
 APP_ENV=production
 PORT=8000
 ```
+
+Суточный лимит количества отправок отменён. Если в существующем `.env` осталась строка `MAX_DELIVERIES_PER_USER_PER_DAY=500`, новая версия её игнорирует; строку можно удалить. Ограничения скорости и ожидания Telegram продолжают действовать.
 
 Откуда взять значения:
 

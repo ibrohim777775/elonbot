@@ -14,6 +14,7 @@ import { logError } from "./log";
 import { MiniApp } from "./miniapp";
 import { createHttpServer } from "./server";
 import { TelegramService } from "./telegram";
+import { Notifications } from "./notifications";
 
 async function main() {
   const config = loadConfig();
@@ -22,6 +23,7 @@ async function main() {
   const accounts = new Accounts(config, telegram);
   const api = new Api(config.botToken);
   const delivery = new Delivery(database, config, accounts, api);
+  const notifications = new Notifications(database, api);
   const groups = new Groups(accounts);
   const support = new Support(database, config, api);
   const bot = createBot(config, database, accounts, groups, delivery, support);
@@ -54,6 +56,7 @@ async function main() {
     maintenance = (async () => {
       await telegram.cleanup(); await accounts.restore(database);
       await support.recover();
+      await notifications.maintain();
       await database.query("DELETE FROM admin_browser_tokens WHERE expires_at<now()");
       await database.query("DELETE FROM account_logins WHERE expires_at<now()");
       await database.query("DELETE FROM processed_updates WHERE created_at<now()-interval '7 days'");
@@ -63,12 +66,14 @@ async function main() {
   const scheduler = setInterval(() => { void delivery.run().catch(error => logError("delivery_tick_failed", error)); }, 30_000);
   const upkeep = setInterval(maintain, 60_000);
   const broadcastWorker = setInterval(() => { void admin.broadcasts.run().catch(error => logError("broadcast_tick_failed", error)); }, 1000);
+  const notificationWorker = setInterval(() => { void notifications.run().catch(error => logError("notification_tick_failed", error)); }, 1000);
   let stopping = false;
   const stop = async () => {
     if (stopping) return; stopping = true; ready = false;
     clearInterval(scheduler); clearInterval(upkeep); clearInterval(broadcastWorker);
+    clearInterval(notificationWorker);
     await new Promise<void>(resolve => server.close(() => resolve()));
-    await maintenance; await delivery.wait(); await admin.broadcasts.wait(); await telegram.close(); await database.close();
+    await maintenance; await delivery.wait(); await admin.broadcasts.wait(); await notifications.wait(); await telegram.close(); await database.close();
   };
   for (const signal of ["SIGTERM", "SIGINT"] as const) process.once(signal, () => { void stop().catch(error => { logError("shutdown_failed", error); process.exitCode = 1; }); });
   process.on("unhandledRejection", error => { logError("unhandled_rejection", error); process.exitCode = 1; void stop().catch(failure => logError("shutdown_failed", failure)); });

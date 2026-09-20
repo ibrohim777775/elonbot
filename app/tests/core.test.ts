@@ -14,6 +14,8 @@ test("configuration requires API data and a durable valid key; legacy DB URL acc
     SESSION_ENCRYPTION_KEY: config.encryptionKey.toString("base64"), WEBHOOK_BASE_URL: config.baseUrl, WEBHOOK_SECRET: config.webhookSecret, ADMIN_IDS: "101, 202" };
   assert.equal(loadConfig(env).databaseUrl, "postgresql://localhost/test");
   assert.deepEqual(loadConfig(env).adminIds, ["101", "202"]);
+  // Existing server .env files must not re-enable the retired daily quota.
+  assert.deepEqual(loadConfig({ ...env, MAX_DELIVERIES_PER_USER_PER_DAY: "500" }), loadConfig(env));
   assert.equal(loadConfig({ ...env, MAX_GROUPS_PER_USER: "20" }).maxGroupsPerAnnouncement, 30);
   assert.equal(loadConfig({ ...env, MAX_GROUPS_PER_ANNOUNCEMENT: "15" }).maxGroupsPerAnnouncement, 15);
   assert.throws(() => loadConfig({ ...env, MAX_GROUPS_PER_ANNOUNCEMENT: "0" }));
@@ -52,7 +54,7 @@ test("migration is repeatable and preserves users, albums, schedules and prior b
     assert.equal((await one(database, "SELECT trial_started_at FROM users WHERE id=1")).trial_started_at.getTime(), trial.trial_started_at.getTime());
     assert.equal((await one(database, "SELECT count(*)::int n FROM users")).n, 2);
     assert.deepEqual((await one(database, "SELECT photo_file_ids FROM templates")).photo_file_ids, ["one", "two"]);
-    assert.equal((await one(database, "SELECT count(*)::int n FROM schema_migrations")).n, 8);
+    assert.equal((await one(database, "SELECT count(*)::int n FROM schema_migrations")).n, 9);
     assert.deepEqual((await one(database, "SELECT photo_message_ids FROM templates")).photo_message_ids, []);
     assert.equal((await one(database, "SELECT interval_minutes FROM templates")).interval_minutes, null);
     assert.equal((await one(database, "SELECT count(*)::int n FROM telegram_group_cache")).n, 0);

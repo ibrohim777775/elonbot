@@ -7,6 +7,34 @@ import { Groups } from "../groups";
 import { Failure } from "../telegram";
 import { addGroups, announcement, config, seed, testDatabase } from "./helpers";
 
+test("more than 500 daily deliveries remain allowed while the per-chat minute limit still applies", async () => {
+  const { pg, database } = await testDatabase();
+  try {
+    await seed(database); const id = await announcement(database, "1", ["1"]);
+    await database.query(`INSERT INTO delivery_logs(announcement_id,group_id,scheduled_at,sent_at,status,sender_telegram_id)
+      SELECT $1,1,now()-n*interval '1 minute',now()-interval '2 minutes','sent',101
+      FROM generate_series(1,500) n`, [id]);
+    const calls: any[] = [];
+    const accounts = new Accounts(config, { async execute(method, params) {
+      assert.equal(method, "send"); calls.push(params); return { messageIds: [calls.length] };
+    } });
+    await new Delivery(database, config, accounts, {} as any).run();
+    assert.equal(calls.length, 1, "The 501st delivery must not wait for a daily quota reset");
+    assert.equal((await one(database, "SELECT count(*)::int n FROM delivery_logs WHERE status='sent'")).n, 501);
+
+    const next = await announcement(database, "1", ["1"]);
+    await new Delivery(database, config, accounts, {} as any).run();
+    assert.equal(calls.length, 1, "Another message to the same group still waits for the minute limit");
+    assert.ok((await one(database, "SELECT next_run_at FROM announcements WHERE id=$1", [next])).next_run_at > new Date());
+
+    await database.query("UPDATE delivery_logs SET sent_at=now()-interval '2 minutes' WHERE announcement_id=$1", [id]);
+    await database.query("UPDATE announcements SET next_run_at=now()-interval '1 second' WHERE id=$1", [next]);
+    await new Delivery(database, config, accounts, {} as any).run();
+    assert.equal(calls.length, 2);
+    assert.equal((await one(database, "SELECT count(*)::int n FROM delivery_logs WHERE status='sent'")).n, 502);
+  } finally { await pg.close(); }
+});
+
 test("delivery never exceeds 30 targets across retries, even for a legacy oversized announcement", async () => {
   const { pg, database } = await testDatabase();
   try {

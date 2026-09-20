@@ -2,6 +2,7 @@ import { Api } from "grammy";
 import { Config } from "./config";
 import { Database, lockUser, one } from "./db";
 import { planState, tariff } from "./billing";
+import { enqueueNotification } from "./notifications";
 import { photosOf, photoMessageIds, photoCount } from "./media";
 import { TelegramTransport } from "./accounts";
 import { MiniAppUser } from "./miniapp-auth";
@@ -121,9 +122,13 @@ export class Admin {
         }
         const before = await one(tx, "SELECT paid_until FROM users WHERE id=$1 FOR UPDATE", [id]);
         const after = await one(tx, `UPDATE users SET paid_until=${action === "activate" ? "GREATEST(now(),trial_ends_at,paid_until)+interval '30 days'" : "NULL"},updated_at=now() WHERE id=$1 RETURNING paid_until`, [id]);
-        return one(tx, `INSERT INTO tariff_events(user_id,admin_telegram_id,request_id,action,amount_sum,previous_until,paid_until,note)
+        const event = await one(tx, `INSERT INTO tariff_events(user_id,admin_telegram_id,request_id,action,amount_sum,previous_until,paid_until,note)
           VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, [id, String(identity.id), key, action,
           action === "activate" ? tariff.priceSum : 0, before.paid_until, after.paid_until, note]);
+        if (action === "activate") await enqueueNotification(tx, id, `tariff_activated:${event.id}`, "tariff_activated", {
+          until: new Date(after.paid_until).toISOString(),
+        });
+        return event;
       });
     }
     throw new Failure("NOT_FOUND");

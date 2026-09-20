@@ -86,7 +86,7 @@ STOPPED=1
 systemctl stop "$SERVICE"
 mv -T -- "$APP_DIR" "$BACKUP"
 mv -T -- "$STAGE" "$APP_DIR"
-# The application applies pending migrations (including 008) before becoming ready.
+# The application applies pending migrations (including 009) before becoming ready.
 systemctl start "$SERVICE"
 HEALTHY=0
 for ((attempt=1; attempt<=60; attempt++)); do

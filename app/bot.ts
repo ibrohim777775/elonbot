@@ -11,6 +11,8 @@ import { planState, requireCreationAccess } from "./billing";
 import { Support } from "./support";
 import { botCommands } from "./commands";
 import { AdminAuth } from "./admin-auth";
+import { announcementState } from "./announcement-state";
+import { messageLength } from "./content";
 import { maxAnnouncementPhotos, photoMessageIds, photoCount } from "./media";
 import { SendingWindow, formatMinute, nextSendingTime, parseClockTime, parseSendingWindow, validSendingWindow } from "./schedule";
 
@@ -103,6 +105,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
           error.code === "LOGIN_REQUIRED" || error.code === "ALREADY_CONNECTED" ? "account.connect_prompt" :
           error.code === "ANNOUNCEMENT_GROUP_LIMIT" ? "validation.announcement_group_limit" :
           error.code === "ANNOUNCEMENT_LIMIT" ? "validation.limit_reached" :
+          error.code === "MESSAGE_TOO_LONG" ? "validation.message_too_long" :
           error.code === "INVALID_SENDING_WINDOW" ? "announcements.window_invalid" :
           authErrors.has(error.code) ? "account.expired" : error.code === "GROUPS_RATE_LIMITED" ? "groups.rate_limited" :
           error.seconds ? "common.rate_limited" :
@@ -279,6 +282,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   const contentDescription = (w: Wizard) => [w.text, w.contact_name, w.contact_phone, w.contact_telegram].filter(Boolean).join("\n");
   async function showConfirmation(ctx: Ctx) {
     const w = ctx.wizard;
+    validateContent(w);
     w.confirmationBack = w.step === "save_template" ? "save_template" : w.step === "first_run" ? "first_run" : w.fromTemplate ? "template" : "first_run";
     w.step = "confirm";
     const legacyPreview = !!w.photos?.length;
@@ -321,6 +325,29 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   }
   function validateContent(w: Wizard) {
     if (!w.text || w.text.length > 4096 || !settingsReady(w) || draftPhotoCount(w) > maxAnnouncementPhotos) throw new Failure("INVALID_CONTENT");
+    validateLength(w);
+  }
+  function validateLength(record: Record<string, any>) {
+    if (messageLength(record) > 4096) throw new Failure("MESSAGE_TOO_LONG");
+  }
+  async function resumeAnnouncement(ctx: Ctx, record: any) {
+    if (record.status === "deleted") throw new Failure("NOT_FOUND");
+    if (record.status === "active") return;
+    validateLength(record);
+    if (!validSendingWindow(record)) throw new Failure("INVALID_SENDING_WINDOW");
+    await accounts.params(ctx.db, ctx.userId);
+    const targets = await one(ctx.db, `SELECT count(*)::int total, count(*) FILTER(WHERE ug.is_active AND ug.can_post)::int available
+      FROM announcement_groups ag LEFT JOIN user_groups ug ON ug.group_id=ag.group_id AND ug.user_id=$2
+      WHERE ag.announcement_id=$1`, [record.id, ctx.userId]);
+    if (!targets.available) throw new Failure("GROUP_REQUIRED");
+    if (targets.total > config.maxGroupsPerAnnouncement) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
+    const count = await one(ctx.db, "SELECT count(*)::int n FROM announcements WHERE user_id=$1 AND status='active'", [ctx.userId]);
+    if (count.n >= config.maxAnnouncements) throw new Failure("ANNOUNCEMENT_LIMIT");
+    await requireCreationAccess(ctx.db, ctx.userId, true);
+    // Continue the existing cycle after a manual pause so completed groups are not sent twice.
+    await ctx.db.query(`UPDATE announcements SET status='active',pause_reason=NULL,next_run_at=$2,updated_at=now() WHERE id=$1`,
+      [record.id, nextSendingTime(new Date(Math.max(Date.now(), record.next_run_at ? new Date(record.next_run_at).getTime() : 0)), record)]);
+    ctx.sendNow = true;
   }
   const saveTemplate = async (ctx: Ctx) => {
     const w = ctx.wizard;
@@ -351,14 +378,19 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   }
   const showCard = async (ctx: Ctx, table: "announcements" | "templates", id: string) => {
     const row = await owned(ctx, table, id);
+    if (table === "announcements" && row.status === "deleted") throw new Failure("NOT_FOUND");
     const prefix = table === "templates" ? "templates" : "ann";
     const keyboard = new InlineKeyboard();
-    if (table === "announcements") keyboard.text(t("common.edit"), `ann:edit:${id}`).row();
+    if (table === "announcements") {
+      keyboard.text(t(row.status === "active" ? "announcements.pause" : "announcements.resume_sending"), `ann:${row.status === "active" ? "pause" : "resume"}:${id}`).row()
+        .text(t("announcements.refresh_status"), `ann:show:${id}`).row().text(t("common.edit"), `ann:edit:${id}`).row();
+    }
     else keyboard.text(t("templates.use"), `templates:use:${id}`).row();
     keyboard.text(t(table === "templates" ? "templates.delete" : "common.delete"), `${prefix}:${table === "templates" ? "delete" : "delete_request"}:${id}`).row()
       .text(t("common.back"), `${prefix}:list`);
     const count = table === "announcements" ? (await one(ctx.db, "SELECT count(*)::int n FROM announcement_groups WHERE announcement_id=$1", [id])).n : 0;
     let text = t(`${table}.details`, { text: contentDescription(row), interval: row.interval_minutes, groups: count, window: windowDescription(row) });
+    if (table === "announcements") text += `\n\n${await announcementState(ctx.db, row)}`;
     if (table === "templates") {
       const draft = await templateDraft(ctx, id, "template");
       text += `\n\n${settingsReady(draft) ? await draftDescription(ctx, draft) : t("templates.needs_settings")}`;
@@ -558,15 +590,14 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         await lockUser(ctx.db, ctx.userId);
         const affected = (await ctx.db.query(`SELECT a.id FROM announcements a JOIN announcement_groups ag ON ag.announcement_id=a.id
           WHERE a.user_id=$1 AND ag.group_id=$2`, [ctx.userId, id])).rows;
-        let failures = 0;
         for (const a of affected) {
-          const other = await one(ctx.db, "SELECT 1 FROM announcement_groups WHERE announcement_id=$1 AND group_id<>$2", [a.id, id]);
-          if (!other) { failures += await delivery.removePublished(ctx.db, ctx.userId, String(a.id)); await ctx.db.query("DELETE FROM announcements WHERE id=$1 AND user_id=$2", [a.id, ctx.userId]); }
-          else await ctx.db.query("DELETE FROM announcement_groups WHERE announcement_id=$1 AND group_id=$2", [a.id, id]);
+          await ctx.db.query("DELETE FROM announcement_groups WHERE announcement_id=$1 AND group_id=$2", [a.id, id]);
+          const other = await one(ctx.db, `SELECT 1 FROM announcement_groups ag JOIN user_groups ug ON ug.group_id=ag.group_id
+            WHERE ag.announcement_id=$1 AND ug.user_id=$2 AND ug.is_active AND ug.can_post`, [a.id, ctx.userId]);
+          if (!other) await ctx.db.query("UPDATE announcements SET status='paused',pause_reason='no_groups',updated_at=now() WHERE id=$1 AND status='active'", [a.id]);
         }
         await ctx.db.query("DELETE FROM user_groups WHERE user_id=$1 AND group_id=$2", [ctx.userId, id]);
         await ctx.reply(t("groups.disconnected"));
-        if (failures) await ctx.reply(t("delivery.cleanup_partial", { count: failures }));
         await listGroups(ctx);
       }
       return;
@@ -580,6 +611,14 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         await askContent(ctx); return;
       }
       if (p[1] === "show") { await showCard(ctx, table, id); ctx.wizard = {}; return; }
+      if (table === "announcements" && ["pause", "resume"].includes(p[1])) {
+        await lockUser(ctx.db, ctx.userId);
+        const record = await owned(ctx, table, id);
+        if (record.status === "deleted") throw new Failure("NOT_FOUND");
+        if (p[1] === "pause") await ctx.db.query("UPDATE announcements SET status='paused',pause_reason='manual',updated_at=now() WHERE id=$1", [id]);
+        else await resumeAnnouncement(ctx, record);
+        ctx.wizard = {}; await showCard(ctx, table, id); return;
+      }
       if (table === "templates" && p[1] === "use") { await useTemplate(ctx, id); return; }
       if (data === "templates:save" && w.kind === "template" && w.step === "confirm") {
         await lockUser(ctx.db, ctx.userId);
@@ -613,13 +652,11 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         await lockUser(ctx.db, ctx.userId);
         const record = await owned(ctx, "announcements", w.editId);
         if (record.status === "deleted") throw new Failure("NOT_FOUND");
-        if (record.status === "paused") {
-          await requireCreationAccess(ctx.db, ctx.userId);
-          const count = await one(ctx.db, "SELECT count(*)::int n FROM announcements WHERE user_id=$1 AND status='active'", [ctx.userId]);
-          if (count.n >= config.maxAnnouncements) throw new Failure("ANNOUNCEMENT_LIMIT");
-        }
+        const updated = { ...record, text: w.text ?? record.text };
+        validateLength(updated);
+        if (record.status === "paused" && record.pause_reason === "photo_source_missing") await resumeAnnouncement(ctx, updated);
         await ctx.db.query(`UPDATE announcements SET photo_file_id=NULL,photo_file_ids='[]',photo_message_ids=$3,
-          text=COALESCE($4,text),status='active',updated_at=now() WHERE id=$1 AND user_id=$2`,
+          text=COALESCE($4,text),updated_at=now() WHERE id=$1 AND user_id=$2`,
           [w.editId, ctx.userId, JSON.stringify(w.photoMessageIds), w.text ?? null]);
         const editId = w.editId; ctx.wizard = {};
         await ctx.reply(t("templates.updated")); await showCard(ctx, "announcements", editId); return;
@@ -782,7 +819,8 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     }
     if (w.step?.startsWith("edit_") && w.editId && w.table === "announcements") {
       await lockUser(ctx.db, ctx.userId);
-      await owned(ctx, w.table, w.editId);
+      const record = await owned(ctx, w.table, w.editId);
+      if (record.status === "deleted") throw new Failure("NOT_FOUND");
       const field = w.step.slice(5);
       if (field === "photo" && message.photo) {
         if (!await acceptPhoto(ctx)) return;
@@ -792,8 +830,12 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         if (field === "contact") {
           const isTelegram = message.text.startsWith("@") || message.text.includes("t.me/");
           if (!isTelegram && message.text.length > 32) throw new Failure("INVALID_CONTACT");
+          validateLength({ ...record, contact_phone: isTelegram ? null : message.text, contact_telegram: isTelegram ? message.text : null });
           await ctx.db.query(`UPDATE ${w.table} SET contact_phone=$3,contact_telegram=$4,updated_at=now() WHERE id=$1 AND user_id=$2`, [w.editId, ctx.userId, isTelegram ? null : message.text, isTelegram ? message.text : null]);
-        } else await ctx.db.query(`UPDATE ${w.table} SET ${field === "name" ? "contact_name" : "text"}=$3,updated_at=now() WHERE id=$1 AND user_id=$2`, [w.editId, ctx.userId, message.text]);
+        } else {
+          validateLength({ ...record, [field === "name" ? "contact_name" : "text"]: message.text });
+          await ctx.db.query(`UPDATE ${w.table} SET ${field === "name" ? "contact_name" : "text"}=$3,updated_at=now() WHERE id=$1 AND user_id=$2`, [w.editId, ctx.userId, message.text]);
+        }
       } else { await ctx.reply(t(field === "photo" ? "templates.photo_required" : "common.error")); return; }
       const table = w.table, editId = w.editId; ctx.wizard = {}; await ctx.reply(t("templates.updated")); await showCard(ctx, table, editId); return;
     }

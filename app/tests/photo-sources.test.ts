@@ -131,7 +131,7 @@ test("editing collects ten forwarded photos until Done, supports cancellation an
     } } as any);
     await callback(`ann:edit_photo:${id}`); await photo(90); await callback("wizard:back:edit_photo");
     assert.equal((await one(database, "SELECT photo_file_id FROM announcements WHERE id=$1", [id])).photo_file_id, "old");
-    await database.query("UPDATE announcements SET status='paused' WHERE id=$1", [id]);
+    await database.query("UPDATE announcements SET status='paused',pause_reason='photo_source_missing' WHERE id=$1", [id]);
     await callback(`ann:edit_photo:${id}`);
     for (const messageId of [...ids].reverse()) await photo(messageId);
     await photo(ids[0]); await photo(111);

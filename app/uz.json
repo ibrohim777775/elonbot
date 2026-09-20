@@ -51,6 +51,9 @@
     "choose_section": "Kerakli bo'limni tanlang."
   },
   "announcements": {
+    "pause": "⏸ To‘xtatib turish",
+    "resume_sending": "▶️ Davom ettirish",
+    "refresh_status": "🔄 Holatni yangilash",
     "title": "E'lonlarim",
     "create": "E'lon yaratish",
     "from_template": "Shablondan tanlash",
@@ -149,8 +152,8 @@
     "no_bot_groups": "Avval akkauntingizni va kamida bitta guruhni ulang.",
     "connect_instruction": "Avval rasmiy Telegram ilovasida kerakli guruhga qo'shiling, so'ng bu ro'yxatni yangilang.",
     "connection_success": "Guruh muvaffaqiyatli ulandi.",
-    "disconnect_confirm": "Bu guruhni ro'yxatingizdan o'chirmoqchimisiz? U sizning e'lonlaringizdan ham chiqariladi.",
-    "disconnected": "Guruh ro'yxatingizdan o'chirildi.",
+    "disconnect_confirm": "Guruhni uzmoqchimisiz? U e’lonlaringizdan chiqariladi. Mavjud guruhi qolmagan e’lon pauzaga o‘tadi. E’lonlar va yuborilgan xabarlar saqlanadi.",
+    "disconnected": "Guruh uzildi. E’lonlar va yuborilgan xabarlar saqlandi. Mavjud guruhi qolmagan e’lon uchun yangi guruhlarni tanlab, «Davom ettirish»ni bosing.",
     "bot_not_member": "Bot bu guruhga qo'shilmagan.",
     "bot_cannot_post": "Botda ushbu guruhga xabar yuborish huquqi yo'q.",
     "user_not_admin": "Guruhni ulash uchun siz guruh administratori bo'lishingiz kerak.",
@@ -158,12 +161,34 @@
     "user_cannot_post": "Akkauntingizda ushbu guruhga xabar yuborish huquqi yo'q."
   },
   "validation": {
+    "message_too_long": "Matn ism va aloqa ma’lumotlari bilan birga 4096 belgidan oshdi. Uni qisqartirib, qayta urinib ko‘ring.",
     "contact_required": "Telefon raqami yoki Telegram akkauntingizni kiriting.",
     "group_required": "Kamida bitta guruhni tanlang.",
     "limit_reached": "Ruxsat etilgan limitga yetdingiz.",
     "announcement_group_limit": "Bitta e'lon uchun ko'pi bilan {limit} ta guruh tanlash mumkin. Ortiqcha guruhlar tanlovini bekor qiling. Guruhlarni ulash soni cheklanmagan."
   },
   "delivery": {
+    "recovered": "✅ Yuborish tiklandi: joriy yuborish muvaffaqiyatli yakunlandi.",
+    "never": "—",
+    "last_result": "Oxirgi yuborish natijasi:",
+    "summary": "Guruhlar: {total}\n✅ Yuborildi: {sent}\n⏳ Navbatda: {waiting}\n❌ Xatolar: {failed}\n🚫 Mavjud emas yoki uzilgan: {unavailable}",
+    "card_state": "Holat: {state}\nOxirgi yuborish: {last}\nKeyingi urinish: {next}\nVaqt — Toshkent. Navbat yoki Telegram cheklovlari sabab urinish kechikishi mumkin.",
+    "notification": "№{id} e’lon: {time} holatiga natija (Toshkent).",
+    "open_announcement": "E’lonni ochish",
+    "state": {
+      "manual": "siz to‘xtatib qo‘ygansiz",
+      "no_groups": "mavjud guruh yo‘q — guruhlarni tanlab, «Davom ettirish»ni bosing",
+      "photo_source_missing": "asl surat o‘chirilgan — suratlarni qayta yo‘naltiring",
+      "invalid_content": "matn juda uzun — tuzatib, «Davom ettirish»ni bosing",
+      "expired": "tarif muddati tugagan",
+      "account": "Telegram akkauntni ulash kerak",
+      "telegram_wait": "Telegram belgilagan kutish vaqti",
+      "window": "yuborishga ruxsat berilgan vaqt kutilmoqda",
+      "waiting": "ayrim guruhlar keyingi urinishni kutmoqda",
+      "ready": "yuborish navbatida",
+      "scheduled": "jadval bo‘yicha yuborish yoqilgan",
+      "deleted": "o‘chirilgan"
+    },
     "rate_limited": "Telegram limiti sabab yuborish keyinroq davom ettiriladi.",
     "group_access_lost": "Guruhga yuborish to'xtatildi: akkauntingizda kerakli huquq yo'q yoki siz guruhdan chiqarilgansiz.",
     "photo_unavailable": "Rasmni ko'rsatib bo'lmadi. Asl xabarlar o'chirilgan bo'lsa, tayyor xabarni qayta yo'naltirib, e'londagi rasmlarni almashtiring yoki yangi shablon yarating.",
@@ -176,6 +201,10 @@
     "report": "{title}\n\nFoydalanuvchilar: {users}\nGuruhlar: {groups}\nFaol e'lonlar: {active}\nTo'xtatilgan e'lonlar: {paused}\nMuvaffaqiyatli yuborishlar: {sent}\nXatoliklar: {failed}"
   },
   "tariff": {
+    "notification_trial": "Sinov muddati {until} da tugaydi (Toshkent), bir sutkadan kam qoldi. Yuborish davom etishi uchun «Tarif»ni ochib, administratorga murojaat qiling.",
+    "notification_expiring": "Tarif {until} gacha amal qiladi (Toshkent), bir sutkadan kam qoldi. Yuborish davom etishi uchun administrator orqali uzaytiring.",
+    "notification_expired": "Tarif muddati {until} da tugadi (Toshkent). Avtomatik yuborish to‘xtadi. E’lonlaringiz saqlangan. Tarif uzaytirilgach, yoqilgan e’lonlar jadval bo‘yicha yuboriladi; o‘zingiz to‘xtatgan e’lonlar pauzada qoladi.",
+    "notification_activated": "✅ Tarif {until} gacha faollashtirildi (Toshkent).\nYuborilishi yoqilgan, akkaunti ulangan va mavjud guruhlari bor e’lonlar: {count}. Ular jadval, navbat va Telegram cheklovlarini hisobga olib yuboriladi. Pauzadagi e’lonni «Davom ettirish» tugmasi orqali yoqing.",
     "not_started": "7 kunlik bepul muddat birinchi e'lon yaratilganda boshlanadi.",
     "trial": "Bepul tarif {until} gacha faol (Toshkent vaqti).",
     "paid": "Pullik tarif {until} gacha faol (Toshkent vaqti).",

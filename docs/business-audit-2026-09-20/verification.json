@@ -1,0 +1,38 @@
+{
+  "environment": "PGlite + mocked Telegram; no production data or sends",
+  "results": [
+    {
+      "finding": "Deleted announcement resets usage",
+      "configuredDailyLimit": 1,
+      "countedAfterDelete": 0,
+      "actualMockDeliveriesWithinDay": 2,
+      "verified": true
+    },
+    {
+      "finding": "Expired announcement card lacks delivery state and pause",
+      "text": "Объявление: Hello <world>\nИнтервал: 5 мин.\nГрупп: 1\nВремя отправки: Круглосуточно (24 часа)",
+      "buttons": [
+        "Редактировать",
+        "Удалить",
+        "Назад"
+      ],
+      "verified": true
+    },
+    {
+      "finding": "Body validation excludes appended contact",
+      "acceptedBodyCharacters": 4096,
+      "error": "MESSAGE_TOO_LONG",
+      "userNotifications": 0,
+      "verified": true
+    },
+    {
+      "finding": "Disconnecting the last group deletes announcement and published messages",
+      "confirmationText": "Удалить группу из вашего списка? Она также будет исключена из ваших объявлений.",
+      "mockDeletedMessageIds": [
+        4001
+      ],
+      "announcementDeleted": true,
+      "verified": true
+    }
+  ]
+}
