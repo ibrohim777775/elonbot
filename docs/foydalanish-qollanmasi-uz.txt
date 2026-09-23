@@ -24,6 +24,19 @@ Bot bilan yozishayotgan akkauntingizni ulang. Kod va parolni chatga xabar qilib 
 
 «Akkaunt ulandi» yozuvi chiqqach, botga qayting. Har safar qayta kirish shart emas. Havola eskirsa, botdan yangisini oling.
 
+Maxfiylik va ma'lumotlaringiz
+
+Elonbot boshqa chatlardagi yozishmalaringiz tarixini saqlamaydi va ulardagi yangi xabarlarni, jumladan guruhlardagi e'lonlarga kelgan javoblarni kuzatmaydi. Guruhlarni tanlash uchun ilova Telegramdan chatlar ro'yxati va guruhlar haqidagi ma'lumotlarni oladi.
+
+Xizmat ishlashi uchun quyidagilar saqlanadi:
+• Har safar qayta kirmasdan e'lon yuborish uchun shifrlangan Telegram ulanish sessiyasi.
+• Profil, tarif va guruh ma'lumotlari, e'lonlaringiz, qoralamalar, shablonlar, sozlamalar va yuborish natijalari.
+• Bot orqali yordam so'rab o'zingiz yuborgan murojaatlar. Bu yozishmalar xizmat administratorlariga ko'rinadi.
+
+E'lon yaratish uchun botga o'zingiz yuborgan yoki yo'naltirgan xabar va rasmlar e'lonni chop etish uchun qayta ishlanadi. Matn e'lon, qoralama yoki shablonda saqlanadi. Yangi rasmlar uchun bot chatidagi xabar raqamlari saqlanadi, rasm fayllari bazaga yozilmaydi.
+
+Ulanish sahifasida kiritilgan kirish kodi va 2FA paroli saqlanmaydi. Telegram sessiyasining ruxsatlari faqat tanlangan guruhlar bilan cheklanmaydi. Kirishni bekor qilish uchun botdagi «Sozlamalar» → «Telegram akkaunt» bo'limidan akkauntni uzing yoki Telegram → Sozlamalar → Qurilmalar orqali Elonbot sessiyasini tugating. Akkauntni uzish ulanish sessiyasini o'chiradi, lekin e'lonlar, guruhlar va xizmatdagi boshqa ma'lumotlar saqlanadi.
+
 3. Guruhlarni qo'shing
 
 «Guruhlar» → «Guruh qo'shish» ni bosing. Ochilgan sahifada guruhni topib, yonidagi «Ulash» tugmasini bosing.

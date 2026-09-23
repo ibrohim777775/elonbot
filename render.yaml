@@ -12,6 +12,11 @@ services:
         value: 24.12.0
       - key: APP_ENV
         value: production
+      - key: HOST
+        value: 0.0.0.0
+      # Configure exact ingress proxy IPs after confirming the provider's proxy chain.
+      - key: TRUSTED_PROXY_IPS
+        sync: false
       - key: TELEGRAM_API_ID
         sync: false
       - key: TELEGRAM_API_HASH

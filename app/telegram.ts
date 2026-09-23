@@ -46,7 +46,7 @@ export function peer(chatId: string, accessHash?: string | null): Api.TypeInputP
   return new Api.InputPeerChat({ chatId: bigInt(chatId.slice(1)) });
 }
 
-type Pending = { client: TelegramClient<StringSession>; phone: string; hash: string; expires: number; stage: "code" | "password" };
+type Pending = { client: TelegramClient<StringSession>; ownerId: string; phone: string; hash: string; expires: number; stage: "starting" | "code" | "password" };
 type Live = { client: TelegramClient<StringSession>; session: string; touched: number };
 
 export class TelegramService {
@@ -68,14 +68,14 @@ export class TelegramService {
 
   async cleanup() {
     for (const [key, value] of this.pending) if (value.expires < Date.now()) {
-      this.pending.delete(key);
-      await value.client.destroy();
+      await this.cancelLogin(key);
     }
     // Keep authorized connections ready for the next scheduled publication.
   }
 
   async close() {
     await Promise.allSettled([...this.pending.values(), ...this.clients.values()].map(v => v.client.destroy()));
+    this.pending.clear(); this.clients.clear();
     if (this.mediaClient) await this.mediaClient.then(client => client.destroy()).catch(() => {});
   }
 
@@ -139,12 +139,12 @@ export class TelegramService {
   }
 
   private async finish(key: string, expectedId: string) {
-    const flow = this.pending.get(key)!;
+    const flow = this.pending.get(key);
+    if (!flow || flow.ownerId !== expectedId) throw new Failure("LOGIN_EXPIRED");
     const me = await flow.client.getMe();
+    if (this.pending.get(key) !== flow) throw new Failure("LOGIN_EXPIRED");
     if (me.bot || me.id.toString() !== expectedId) {
-      await flow.client.logOut();
-      await flow.client.destroy();
-      this.pending.delete(key);
+      try { await flow.client.logOut(); } finally { await this.cancelLogin(key); }
       throw new Failure("ACCOUNT_MISMATCH");
     }
     const session = flow.client.session.save();
@@ -153,27 +153,50 @@ export class TelegramService {
     return { stage: "done", session, telegramId: me.id.toString() };
   }
 
+  private async cancelLogin(key: string) {
+    const flow = this.pending.get(key);
+    if (flow) {
+      this.pending.delete(key);
+      await flow.client.destroy();
+    }
+    return { ok: true };
+  }
+
   async login(action: string, p: Record<string, any>) {
     const key = String(p.key);
+    const ownerId = String(p.expectedId);
+    if (!/^[1-9]\d*$/.test(ownerId)) throw new Failure("INVALID_LOGIN_STEP");
     if (action === "begin") {
       if (this.pending.has(key)) throw new Failure("LOGIN_ALREADY_STARTED");
-      if (this.pending.size >= 100) throw new Failure("LOGIN_CAPACITY_REACHED");
       const phone = String(p.value).replace(/[\s()-]/g, "");
       if (!/^\+[1-9]\d{7,14}$/.test(phone)) throw new Failure("PHONE_NUMBER_INVALID");
+      const previous = [...this.pending].find(([, flow]) => flow.ownerId === ownerId);
+      if (this.pending.size - (previous ? 1 : 0) >= 100) throw new Failure("LOGIN_CAPACITY_REACHED");
       const client = this.make();
+      const flow: Pending = { client, ownerId, phone, hash: "", expires: Date.now() + 600_000, stage: "starting" };
+      // Reserve capacity and replace the owner's old flow before any asynchronous work.
+      if (previous) this.pending.delete(previous[0]);
+      this.pending.set(key, flow);
+      const current = () => { if (this.pending.get(key) !== flow || flow.expires < Date.now()) throw new Failure("LOGIN_EXPIRED"); };
       try {
+        if (previous) await previous[1].client.destroy();
+        current();
         await client.connect();
+        current();
         const sent = await client.sendCode(this.credentials, phone);
+        current();
         if (sent.emailRequired || sent.emailCodeSent) throw new Failure("EMAIL_LOGIN_UNSUPPORTED");
-        this.pending.set(key, { client, phone, hash: sent.phoneCodeHash, expires: Date.now() + 600_000, stage: "code" });
+        flow.hash = sent.phoneCodeHash; flow.stage = "code";
         return { stage: "code" };
       } catch (error) {
+        if (this.pending.get(key) === flow) this.pending.delete(key);
         await client.destroy();
         throw error;
       }
     }
     const flow = this.pending.get(key);
-    if (!flow || flow.expires < Date.now()) throw new Failure("LOGIN_EXPIRED");
+    if (!flow || flow.ownerId !== ownerId) throw new Failure("LOGIN_EXPIRED");
+    if (flow.expires < Date.now()) { await this.cancelLogin(key); throw new Failure("LOGIN_EXPIRED"); }
     if (action !== flow.stage) throw new Failure("INVALID_LOGIN_STEP");
     if (action === "code") {
       try {
@@ -248,6 +271,7 @@ export class TelegramService {
   async execute(method: string, p: Record<string, any>) {
     if (method === "health") return { ok: true };
     if (method === "photos.read") return this.sourcePhotos(p);
+    if (method === "login.cancel") return this.cancelLogin(String(p.key));
     if (method.startsWith("login.")) return this.login(method.slice(6), p);
     if (method === "groups") return this.groups(p);
     const client = await this.client(p);

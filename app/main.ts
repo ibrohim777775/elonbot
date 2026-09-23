@@ -42,7 +42,7 @@ async function main() {
     await bot.api.setMyCommands(botCommands(languageOf(user?.language), true), { scope: { type: "chat", chat_id: chatId } }).catch(error => logError("admin_commands_failed", error));
   }
   await bot.api.setChatMenuButton({ menu_button: { type: "web_app", text: t("app.open"), web_app: { url: `${config.baseUrl}/app` } } });
-  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(config.port, "0.0.0.0", resolve); });
+  await new Promise<void>((resolve, reject) => { server.once("error", reject); server.listen(config.port, config.host, resolve); });
   await bot.api.setWebhook(`${config.baseUrl}/webhook/${config.webhookSecret}`, {
     secret_token: config.webhookSecret, allowed_updates: ["message", "callback_query"],
   });
@@ -59,6 +59,7 @@ async function main() {
       await notifications.maintain();
       await database.query("DELETE FROM admin_browser_tokens WHERE expires_at<now()");
       await database.query("DELETE FROM account_logins WHERE expires_at<now()");
+      await database.query("DELETE FROM account_login_limits WHERE window_started_at<now()-interval '1 day'");
       await database.query("DELETE FROM processed_updates WHERE created_at<now()-interval '7 days'");
     })().catch(error => logError("account_maintenance_failed", error)).finally(() => { maintenance = undefined; });
   };

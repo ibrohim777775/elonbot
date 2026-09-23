@@ -114,7 +114,7 @@ test("phone/code authentication handles 2FA step and rejects a different Telegra
     session: { save: () => "session" },
   };
   (service as any).make = () => client;
-  assert.equal((await service.login("begin", { key: "one", value: "+998901234567" })).stage, "code");
+  assert.equal((await service.login("begin", { key: "one", value: "+998901234567", expectedId: "101" })).stage, "code");
   assert.equal((await service.login("code", { key: "one", value: "12345", expectedId: "101" })).stage, "password");
   await assert.rejects((service as any).finish("one", "101"), { code: "ACCOUNT_MISMATCH" });
   assert.equal(logout, true);

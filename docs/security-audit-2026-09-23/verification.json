@@ -1,0 +1,38 @@
+{
+  "commit": "cf70065",
+  "executedAt": "2026-09-23T06:35:33.517Z",
+  "node": "v24.12.0",
+  "malformedUrl": {
+    "unhandledRejection": "ERR_INVALID_URL",
+    "productionHandlerCallsStop": true,
+    "authenticationRequired": false
+  },
+  "sharedProxyRateLimit": {
+    "rejectedAccountAttempts": 30,
+    "legitimateAccountStatus": 429,
+    "rejectedAdminAttempts": 30,
+    "legitimateAdminStatus": 429,
+    "telegramCalls": 0
+  },
+  "pendingLogins": {
+    "flowsByOneUser": 100,
+    "supersededFlowsDestroyed": 0,
+    "otherUserFailure": "LOGIN_CAPACITY_REACHED",
+    "scope": "Application behavior with mocked Telegram; real Telegram and HTTP rate limits were not bypassed or load-tested."
+  },
+  "updateDependency": {
+    "stagingModuleExecuted": true,
+    "updateScriptRunsThisNodeCommandAsRoot": true,
+    "scope": "Benign local module-loading proof plus shell review; no elevated code or production update was executed.",
+    "temporaryDirectory": "C:\\Users\\ibroh\\AppData\\Local\\Temp\\elonbot-security-audit-vWmWQn",
+    "temporaryDirectoryCleaned": true
+  },
+  "checks": {
+    "typecheck": "passed",
+    "tests": 87,
+    "passed": 87,
+    "failed": 0,
+    "npmAuditProductionKnownVulnerabilities": 0,
+    "npmAuditAllKnownVulnerabilities": 0
+  }
+}

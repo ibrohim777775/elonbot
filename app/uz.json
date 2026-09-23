@@ -213,7 +213,7 @@
   },
   "support": {
     "admin_notification": "Yangi murojaat: {name} (ID {id})",
-    "prompt": "Adminga xabaringizni yozing. Matn, rasm, hujjat, ovoz yoki video yuborishingiz mumkin. Javob shu botga keladi. E'lon qoralamangiz saqlanadi.",
+    "prompt": "Adminga xabaringizni yozing. Matn, rasm, hujjat, ovoz yoki video yuborishingiz mumkin. Javob shu botga keladi. Yordam uchun yozishmalar saqlanadi va xizmat administratorlariga ko'rinadi. E'lon qoralamangiz saqlanadi.",
     "received": "Xabaringiz adminga yuborildi. Javob shu botga keladi.",
     "done": "Yozishni tugatish",
     "closed": "Adminga yozish yakunlandi. E'lon qoralamangiz saqlangan; oldingi tugmalar orqali davom etishingiz mumkin.",
@@ -222,11 +222,11 @@
     "admin_reply": "✉️ Admin javobi:\n\n{text}"
   },
   "account": {
-    "disconnect_prompt": "Telegram akkauntingiz ulangan. Uni uzsangiz, e'lon yuborish to'xtaydi; e'lonlar va guruhlar saqlanadi.",
-    "connect_prompt": "E'lonlarni o'z akkauntingizdan yuborish uchun avval Telegram akkauntingizni ulang.",
+    "disconnect_prompt": "Telegram akkauntingiz ulangan. Elonbot boshqa chatlardagi yozishmalaringiz tarixini saqlamaydi va ulardagi yangi xabarlarni kuzatmaydi.\n\nAkkauntni uzsangiz, yuborish to'xtaydi va ulanish sessiyasi o'chiriladi. E'lonlar, guruhlar va xizmatdagi boshqa ma'lumotlar saqlanadi. Elonbot sessiyasini Telegram → Sozlamalar → Qurilmalar orqali ham tugatishingiz mumkin.",
+    "connect_prompt": "E'lonlarni o'z akkauntingizdan yuborish uchun avval Telegram akkauntingizni ulang.\n\nElonbot boshqa chatlardagi yozishmalaringiz tarixini saqlamaydi va ulardagi yangi xabarlarni kuzatmaydi. Xizmat ishlashi uchun ulanish ma'lumotlari, e'lonlaringiz, sozlamalar va yordam uchun murojaatlaringiz saqlanadi. Batafsil — «Qo'llanma» bo'limida.",
     "disconnect": "Akkauntni uzish",
     "connect": "Akkauntni ulash",
-    "login_instruction": "Quyidagi havola orqali o'z Telegram akkauntingizga kiring. Havola 10 daqiqa amal qiladi. Kod va 2FA parolini faqat ochilgan sahifada kiriting.",
+    "login_instruction": "Quyidagi havola orqali o'z Telegram akkauntingizga kiring. Havola 10 daqiqa amal qiladi. Kod va 2FA parolini faqat ochilgan sahifada kiriting — ular saqlanmaydi.\n\nElonbot boshqa chatlardagi yozishmalaringiz tarixini saqlamaydi va ulardagi yangi xabarlarni kuzatmaydi. Ulanish sessiyasi shifrlangan holda saqlanadi. Botga yuborgan e'lonlaringiz, sozlamalar va yordam uchun murojaatlaringiz xizmat ishlashi uchun saqlanadi. Batafsil — «Qo'llanma» bo'limida.",
     "disconnected": "Akkaunt uzildi. Qayta ulash uchun «Sozlamalar» → «Telegram akkaunt» bo'limini oching.",
     "expired": "Telegram sessiyasi tugagan. Yuborishni davom ettirish uchun akkauntingizni qayta ulang."
   }

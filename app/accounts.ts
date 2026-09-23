@@ -22,6 +22,8 @@ export class Accounts {
   }
   async link(db: Queryable, userId: string) {
     if (await one(db, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [userId])) throw new Failure("ALREADY_CONNECTED");
+    const previous = await one(db, "SELECT token_hash FROM account_logins WHERE user_id=$1", [userId]);
+    if (previous) await this.telegram.execute("login.cancel", { key: previous.token_hash });
     const token = randomBytes(32).toString("base64url");
     await db.query(`INSERT INTO account_logins(token_hash,user_id,expires_at) VALUES($1,$2,now()+interval '10 minutes')
       ON CONFLICT(user_id) DO UPDATE SET token_hash=$1,expires_at=now()+interval '10 minutes',attempts=0`, [tokenHash(token), userId]);
@@ -37,6 +39,14 @@ export class Accounts {
       const login = await one(db, `SELECT l.*,u.telegram_id FROM account_logins l JOIN users u ON u.id=l.user_id
         WHERE token_hash=$1 AND expires_at>now() FOR UPDATE OF l`, [tokenHash(token)]);
       if (!login || login.attempts >= 10) return new Failure("LOGIN_EXPIRED");
+      const limits = await one(db, `INSERT INTO account_login_limits(user_id) VALUES($1)
+        ON CONFLICT(user_id) DO UPDATE SET
+          attempts=CASE WHEN account_login_limits.window_started_at<=now()-interval '10 minutes' THEN 0 ELSE account_login_limits.attempts END,
+          code_sends=CASE WHEN account_login_limits.window_started_at<=now()-interval '10 minutes' THEN 0 ELSE account_login_limits.code_sends END,
+          window_started_at=CASE WHEN account_login_limits.window_started_at<=now()-interval '10 minutes' THEN now() ELSE account_login_limits.window_started_at END
+        RETURNING *, greatest(1,ceil(extract(epoch FROM window_started_at+interval '10 minutes'-now())))::int AS retry_seconds`, [login.user_id]);
+      if (limits.attempts >= 10 || (action === "begin" && limits.code_sends >= 3)) return new Failure("RATE_LIMITED", limits.retry_seconds);
+      await db.query("UPDATE account_login_limits SET attempts=attempts+1,code_sends=code_sends+$2 WHERE user_id=$1", [login.user_id, action === "begin" ? 1 : 0]);
       await db.query("UPDATE account_logins SET attempts=attempts+1 WHERE token_hash=$1", [tokenHash(token)]);
       try {
         if (await one(db, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [login.user_id])) return new Failure("ALREADY_CONNECTED");
@@ -56,6 +66,8 @@ export class Accounts {
     return outcome;
   }
   async logout(db: Queryable, userId: string) {
+    const pending = await one(db, "SELECT token_hash FROM account_logins WHERE user_id=$1", [userId]);
+    if (pending) await this.telegram.execute("login.cancel", { key: pending.token_hash });
     try { await this.telegram.execute("logout", await this.params(db, userId)); }
     catch (error) { if (!authErrors.has(safeError(error).code) && safeError(error).code !== "LOGIN_REQUIRED") throw safeError(error); }
     await this.invalidate(db, userId);

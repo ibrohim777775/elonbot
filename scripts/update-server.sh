@@ -9,10 +9,12 @@ SOURCE_DIR=/home/deploy/elonbot-source
 APP_DIR=/opt/elonbot
 SERVICE=elonbot
 export PATH="/opt/node24/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+unset NODE_OPTIONS NODE_PATH
+cd /
 
 die() { printf 'Ошибка: %s\n' "$*" >&2; exit 1; }
 [[ $EUID -eq 0 ]] || die 'Запустите скрипт через sudo bash.'
-for command in git tar node npm curl systemctl runuser flock mktemp stat; do
+for command in git tar node npm curl systemctl runuser flock mktemp stat id; do
   command -v "$command" >/dev/null || die "Не найдена команда: $command"
 done
 exec 9>/run/lock/elonbot-update.lock
@@ -21,11 +23,12 @@ flock -n 9 || die 'Другое обновление уже выполняетс
 [[ -d "$APP_DIR" && ! -L "$APP_DIR" && -f "$APP_DIR/.env" ]] || die "Нужен каталог $APP_DIR с существующим .env."
 [[ $(systemctl show "$SERVICE" -p LoadState --value) == loaded ]] || die "Не найден сервис $SERVICE."
 [[ $(systemctl show "$SERVICE" -p WorkingDirectory --value) == "$APP_DIR" ]] || die 'WorkingDirectory сервиса отличается от APP_DIR.'
-node -e 'const v=+process.versions.node.split(".")[0]; process.exit(v>=22 && v<=24 ? 0 : 1)' || die 'Нужен Node.js 22–24.'
-
 SOURCE_USER=$(stat -c '%U' "$SOURCE_DIR")
 APP_USER=$(systemctl show "$SERVICE" -p User --value)
-APP_USER=${APP_USER:-root}
+[[ -n "$APP_USER" && $(id -u "$APP_USER") -ne 0 ]] || die 'Сервис должен работать от отдельного пользователя, не root. Укажите User=elonbot в systemd.'
+[[ $(id -u "$SOURCE_USER") -ne 0 ]] || die 'Git-репозиторием должен владеть deploy, не root.'
+[[ $(id -u "$APP_USER") -ne $(id -u "$SOURCE_USER") ]] || die 'Приложение и Git-репозиторий должны принадлежать разным пользователям.'
+runuser -u "$APP_USER" -- node -e 'const v=+process.versions.node.split(".")[0]; process.exit(v>=22 && v<=24 ? 0 : 1)' || die 'Нужен Node.js 22–24.'
 repo() { runuser -u "$SOURCE_USER" -- git -C "$SOURCE_DIR" "$@"; }
 [[ -z $(repo status --porcelain) ]] || die 'В серверном репозитории есть локальные изменения. Сохраните их перед обновлением.'
 repo pull --ff-only
@@ -34,7 +37,12 @@ REVISION=$(repo rev-parse --short HEAD)
 STAMP=$(date +%Y%m%d-%H%M%S)-$$
 BACKUP="$APP_DIR.backup-$STAMP"
 FAILED="$APP_DIR.failed-$STAMP"
-STAGE=$(mktemp -d /opt/.elonbot-update.XXXXXX)
+# The parent stays root-owned: the service cannot replace the release directory itself.
+STAGE_ROOT=$(mktemp -d /opt/.elonbot-update.XXXXXX)
+chmod 711 "$STAGE_ROOT"
+STAGE="$STAGE_ROOT/release"
+mkdir -m 700 -- "$STAGE"
+chown "$APP_USER" "$STAGE"
 STOPPED=0
 
 rollback() {
@@ -62,31 +70,33 @@ trap 'rollback 130' INT
 trap 'rollback 143' TERM
 
 printf 'Подготовка версии %s…\n' "$REVISION"
-repo archive HEAD | tar -x -C "$STAGE"
+repo archive HEAD | runuser -u "$APP_USER" -- tar -x -C "$STAGE"
 [[ -f "$STAGE/app/main.ts" && -f "$STAGE/package-lock.json" ]]
-chown -R "$APP_USER" "$STAGE"
 (
   cd "$STAGE"
   runuser -u "$APP_USER" -- env PATH="$PATH" npm_config_cache="$STAGE/.npm-cache" npm ci --include=dev --no-audit --no-fund
   runuser -u "$APP_USER" -- env PATH="$PATH" npm run check
 )
-# Copy the existing configuration; never replace it with .env.example.
-cp -p -- "$APP_DIR/.env" "$STAGE/.env"
-chown "$APP_USER" "$STAGE/.env"
-PORT=$(cd "$STAGE" && node -e '
+# All access to the service-writable tree, including config copying and module loading,
+# runs without root. A dependency's symlink cannot make root overwrite another file.
+runuser -u "$APP_USER" -- cp --remove-destination -- "$APP_DIR/.env" "$STAGE/.env"
+runuser -u "$APP_USER" -- chmod 600 "$STAGE/.env"
+PORT=$(cd "$STAGE" && runuser -u "$APP_USER" -- node -e '
   const fs=require("node:fs");
   const env=require("dotenv").parse(fs.readFileSync(".env"));
   const port=Number(env.PORT || 8000);
   if (!Number.isInteger(port) || port<1 || port>65535) process.exit(1);
   process.stdout.write(String(port));
 ')
+[[ "$PORT" =~ ^[1-9][0-9]{0,4}$ ]] && ((PORT <= 65535)) || die 'Некорректный PORT в подготовленной версии.'
 
 printf 'Переключение версии; резервная копия: %s\n' "$BACKUP"
 STOPPED=1
 systemctl stop "$SERVICE"
 mv -T -- "$APP_DIR" "$BACKUP"
 mv -T -- "$STAGE" "$APP_DIR"
-# The application applies pending migrations (including 009) before becoming ready.
+rmdir -- "$STAGE_ROOT"
+# The application applies pending migrations (including 010) before becoming ready.
 systemctl start "$SERVICE"
 HEALTHY=0
 for ((attempt=1; attempt<=60; attempt++)); do

@@ -9,6 +9,7 @@ import { logError } from "./log";
 import { MiniApp } from "./miniapp";
 import { Admin } from "./admin";
 import { helpPage } from "./help";
+import { clientAddressResolver, RequestLimits } from "./http-security";
 
 const headers = {
   "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff",
@@ -59,18 +60,26 @@ export function createHttpServer(config: Config, database: Database, accounts: A
     "/app-assets/help.css": ["public/help.css", "text/css; charset=utf-8"],
     "/app-assets/help.js": ["public/help.js", "text/javascript; charset=utf-8"],
   };
-  const rate = new Map<string, { at: number; count: number }>();
-  return createServer({ requestTimeout: 180_000, headersTimeout: 15_000 }, async (request, response) => {
+  const rate = new RequestLimits();
+  const clientAddress = clientAddressResolver(config.trustedProxyIps);
+  const handle = async (request: IncomingMessage, response: ServerResponse) => {
     const started = Date.now();
-    const path = new URL(request.url ?? "/", "http://localhost").pathname;
-    const label = path.startsWith("/webhook/") ? "/webhook/:secret" : path;
-    if (process.env.APP_ENV !== "production") response.on("finish", () => {
-      console.log(`[http] ${request.method} ${label} ${response.statusCode} ${Date.now() - started}ms`);
-    });
     try {
+      let url: URL;
+      try {
+        // Only origin-form targets belong to this server, never proxy/absolute URLs.
+        if (!request.url?.startsWith("/") || request.url.startsWith("//")) throw new Error();
+        url = new URL(request.url, "http://localhost");
+        if (url.origin !== "http://localhost") throw new Error();
+      } catch { throw new Failure("INVALID_REQUEST"); }
+      const path = url.pathname;
+      const label = path.startsWith("/webhook/") ? "/webhook/:secret" : path;
+      if (process.env.APP_ENV !== "production") response.on("finish", () => {
+        console.log(`[http] ${request.method} ${label} ${response.statusCode} ${Date.now() - started}ms`);
+      });
       if (request.method === "GET" && path === "/health") { json(response, ready() ? 200 : 503, { status: ready() ? "ok" : "starting" }); return; }
       if (request.method === "GET" && path === "/help") {
-        const content = await helpPage(new URL(request.url!, "http://localhost").searchParams.get("lang"));
+        const content = await helpPage(url.searchParams.get("lang"));
         response.writeHead(200, { ...appHeaders, "Content-Type": "text/html; charset=utf-8" }); response.end(content); return;
       }
       if (request.method === "GET" && assets[path]) {
@@ -89,10 +98,7 @@ export function createHttpServer(config: Config, database: Database, accounts: A
           }
         }
         if (service instanceof Admin && path === "/admin-api/session" && request.method === "POST") {
-          const key = `admin-login:${request.socket.remoteAddress ?? "unknown"}`, now = Date.now();
-          for (const [id, value] of rate) if (now - value.at > 60_000) rate.delete(id);
-          const bucket = rate.get(key) ?? { at: now, count: 0 }; rate.set(key, bucket);
-          if (++bucket.count > 30 || rate.size > 10_000) { json(response, 429, { error: "RATE_LIMITED", seconds: 60 }); return; }
+          if (!rate.allow(`admin-login:${clientAddress(request)}`, 30)) { json(response, 429, { error: "RATE_LIMITED", seconds: 60 }); return; }
           const payload = await body(request, 4096);
           const sessionCookie = await service.browser.exchange(payload?.token);
           response.setHeader("Set-Cookie", sessionCookie); json(response, 200, { ok: true }); return;
@@ -102,11 +108,7 @@ export function createHttpServer(config: Config, database: Database, accounts: A
         }
         const identity = service instanceof Admin ? await service.authenticate(authorization, cookie) : service.authenticate(authorization);
         const bucketKey = `user:${identity.id}`;
-        const now = Date.now();
-        for (const [key, value] of rate) if (now - value.at > 60_000) rate.delete(key);
-        const bucket = rate.get(bucketKey) ?? { at: now, count: 0 };
-        rate.set(bucketKey, bucket);
-        if (++bucket.count > 180) { json(response, 429, { error: "RATE_LIMITED", seconds: 60 }); return; }
+        if (!rate.allow(bucketKey, 180)) { json(response, 429, { error: "RATE_LIMITED", seconds: 60 }); return; }
         if (service instanceof Admin && request.method === "GET" && path.startsWith("/admin-api/files/")) {
           const file = await service.file(path, identity);
           response.writeHead(200, { ...headers, "Content-Type": file.type,
@@ -116,18 +118,13 @@ export function createHttpServer(config: Config, database: Database, accounts: A
         const payload = request.method === "GET" ? {} : await body(request, 64 * 1024);
         if (!payload || typeof payload !== "object" || Array.isArray(payload)) throw new Failure("INVALID_REQUEST");
         const result = service instanceof Admin
-          ? await service.handle(request.method ?? "GET", path, identity, payload, new URL(request.url!, "http://localhost").searchParams)
+          ? await service.handle(request.method ?? "GET", path, identity, payload, url.searchParams)
           : await service.handle(request.method ?? "GET", path, identity, payload);
         json(response, 200, result); return;
       }
       if (request.method === "POST" && path === "/account/login") {
         if (request.headers.origin && request.headers.origin !== new URL(config.baseUrl).origin) { json(response, 403, { error: "INVALID_ORIGIN" }); return; }
-        const ip = request.socket.remoteAddress ?? "unknown";
-        const now = Date.now();
-        for (const [key, value] of rate) if (now - value.at > 60_000) rate.delete(key);
-        const bucket = rate.get(ip) ?? { at: now, count: 0 };
-        if (++bucket.count > 30 || rate.size > 10_000) { json(response, 429, { error: "RATE_LIMITED", seconds: 60 }); return; }
-        rate.set(ip, bucket);
+        if (!rate.allow(`account-login:${clientAddress(request)}`, 30)) { json(response, 429, { error: "RATE_LIMITED", seconds: 60 }); return; }
         const payload = await body(request, 4096);
         if (!payload || [payload.token, payload.action, payload.value].some(x => typeof x !== "string")) throw new Failure("INVALID_REQUEST");
         const result = await accounts.login(database, payload.token, payload.action, payload.value);
@@ -150,5 +147,9 @@ export function createHttpServer(config: Config, database: Database, accounts: A
         json(response, status, { error: error.code, seconds: error.seconds });
       } else { logError("request_failed", error); json(response, 500, { error: "TEMPORARY_ERROR" }); }
     }
+  };
+  return createServer({ requestTimeout: 180_000, headersTimeout: 15_000 }, (request, response) => {
+    // HTTP callbacks do not observe returned promises. Catch failures even in error responses.
+    void handle(request, response).catch(error => { logError("http_handler_failed", error); response.destroy(); });
   });
 }
