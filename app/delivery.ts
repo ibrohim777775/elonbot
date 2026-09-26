@@ -11,6 +11,7 @@ import { photosOf, photoMessageIds, photoCount } from "./media";
 import { renderText, messageLength } from "./content";
 import { DeliverySummary } from "./announcement-state";
 import { enqueueNotification } from "./notifications";
+import { preparePromotionDelivery } from "./promotion";
 export { photosOf } from "./media";
 export { renderText } from "./content";
 export class Delivery {
@@ -150,7 +151,10 @@ export class Delivery {
     const log = previous ?? await one(db, `INSERT INTO delivery_logs(announcement_id,group_id,scheduled_at,status,sender_telegram_id)
       VALUES($1,$2,$3,'rate_limited',$4) RETURNING *`, [a.id, group.id, cycle, params.expectedId]);
     try {
-      if (messageLength(a) > 4096) throw new Failure("MESSAGE_TOO_LONG");
+      const footer = await preparePromotionDelivery(db, String(a.user_id), log);
+      if (footer === null) return new Date(Date.now() + 60_000);
+      const content = { ...a, promotion_footer: footer };
+      if (messageLength(content) > 4096) throw new Failure("MESSAGE_TOO_LONG");
       const deadline = sendingDeadline(new Date(), a);
       if (Date.now() >= a.subscriptionBefore) throw new Failure("SUBSCRIPTION_EXPIRED");
       if (deadline !== undefined && Date.now() >= deadline) throw new Failure("OUTSIDE_SEND_WINDOW");
@@ -161,12 +165,13 @@ export class Delivery {
       if (Date.now() >= a.subscriptionBefore) throw new Failure("SUBSCRIPTION_EXPIRED");
       if (deadline !== undefined && Date.now() >= deadline) throw new Failure("OUTSIDE_SEND_WINDOW");
       const sent = await this.accounts.telegram.execute("send", {
-        ...params, chatId: String(group.chat_id), accessHash: group.access_hash, text: renderText(a),
+        ...params, chatId: String(group.chat_id), accessHash: group.access_hash, text: renderText(content),
         photos, messageIds: log.telegram_message_ids ?? [], sendBefore: deadline, subscriptionBefore: a.subscriptionBefore,
         deliveryKey: `${a.user_id}:${a.id}:${group.id}:${cycle.toISOString()}`,
       });
       await db.query(`UPDATE delivery_logs SET status='sent',sent_at=now(),telegram_message_id=$2,telegram_message_ids=$3,
         error_code=NULL,error_message=NULL WHERE id=$1`, [log.id, sent.messageIds.at(-1), JSON.stringify(sent.messageIds)]);
+      if (footer) await db.query("UPDATE promotion_enrollments SET sent_count=sent_count+1 WHERE user_id=$1", [a.user_id]);
     } catch (error) {
       const failure = safeError(error);
       const outsideWindow = failure.code === "OUTSIDE_SEND_WINDOW";

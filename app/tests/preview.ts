@@ -26,7 +26,7 @@ async function main() {
   await database.query("INSERT INTO templates(user_id,text) VALUES(1,'Сдаётся уютная квартира. Свежий ремонт, рядом метро.')");
   await database.query("INSERT INTO delivery_logs(announcement_id,group_id,scheduled_at,sent_at,status,sender_telegram_id,telegram_message_ids) VALUES($1,1,now()-interval '1 hour',now()-interval '1 hour','sent',101,'[5541]')", [ad]);
   let fakeMessage = 9000;
-  const api = { async sendMessage() { return { message_id: ++fakeMessage }; }, async getFile() { throw new Error("Preview has no real Telegram media"); } } as any;
+  const api = { async getMe() { return { username: "elonbot_test" }; }, async sendMessage() { return { message_id: ++fakeMessage }; }, async getFile() { throw new Error("Preview has no real Telegram media"); } } as any;
   const support = new Support(database, localConfig, api);
   await support.receive(database, "1", { message_id: 50, text: "Здравствуйте! Хочу продлить тариф на 30 дней. Как оплатить?" } as any);
   await support.receive(database, "2", { message_id: 60, text: "Добрый день. Подскажите, можно ли отправлять объявления только с 7 до 22?" } as any);

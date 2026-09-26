@@ -161,7 +161,7 @@
     "user_cannot_post": "Akkauntingizda ushbu guruhga xabar yuborish huquqi yo'q."
   },
   "validation": {
-    "message_too_long": "Matn ism va aloqa ma’lumotlari bilan birga 4096 belgidan oshdi. Uni qisqartirib, qayta urinib ko‘ring.",
+    "message_too_long": "Tayyor matn ism, aloqa ma'lumotlari va aksiya yoqilgan bo'lsa bot yozuvi bilan birga 4096 belgidan oshdi. Uni qisqartirib, qayta urinib ko'ring.",
     "contact_required": "Telefon raqami yoki Telegram akkauntingizni kiriting.",
     "group_required": "Kamida bitta guruhni tanlang.",
     "limit_reached": "Ruxsat etilgan limitga yetdingiz.",
@@ -199,6 +199,18 @@
   "statistics": {
     "title": "Statistika",
     "report": "{title}\n\nFoydalanuvchilar: {users}\nGuruhlar: {groups}\nFaol e'lonlar: {active}\nTo'xtatilgan e'lonlar: {paused}\nMuvaffaqiyatli yuborishlar: {sent}\nXatoliklar: {failed}"
+  },
+  "promotion": {
+    "offer": "🎁 Birinchi oy bepul — rozilik bergan vaqtingizdan 30 kun!\n\nBarcha guruhlaringizga muvaffaqiyatli yuborilgan dastlabki 100 ta e'lon oxiriga bot quyidagi yozuvni qo'shadi. Bir guruhga yuborilgan bitta e'lon, jumladan rasmlar albomi, bitta yuborish hisoblanadi. Xatolar va bir yuborishning takroriy urinishlari hisoblanmaydi.\n\nQo'shiladigan yozuv:\n{footer}\n\n100 ta yuborishdan so'ng yozuv qo'shilmaydi. 30 kunda 100 taga yetmasa, yozuv 100 tagacha, jumladan pullik tarifda ham qo'shiladi. Bepul muddat uzaymaydi. Keyin 30 kun uchun 20 000 so'm, avtomatik pul yechilmaydi.\n\nTaklifdan birinchi to'lovgacha bir marta foydalanish mumkin: sinov muddati boshlanishidan oldin yoki u boshlanganidan keyin 30 kun ichida. Bu 30 kun oddiy sinov muddatining qolgan qismini almashtiradi, unga qo'shilmaydi.",
+    "accept": "✅ Roziman — 30 kunni yoqish",
+    "conditions": "Bepul oydan keyin 30 kun uchun 20 000 so'm. Avtomatik pul yechilmaydi. To'lov va tarifni yoqish uchun adminga yozing.",
+    "decline": "Yozuvsiz davom etish",
+    "declined": "Yozuv evaziga bepul oy yoqilmadi. Oddiy shartlar: birinchi e'londan boshlab 7 kun bepul, keyin 30 kun uchun 20 000 so'm. Taklif mavjud bo'lsa, uni «Tarif» bo'limida qayta ochishingiz mumkin.",
+    "activated": "🎁 Bepul oy {until} gacha yoqildi (Toshkent vaqti).\n\nYozuv bilan yuborilgan e'lonlar: {count} / 100. 100 ta muvaffaqiyatli yuborishdan so'ng yozuv qo'shilmaydi. Oy oldin tugasa, yozuv 100 tagacha qoladi; oy tugagandan keyingi foydalanish alohida to'lanadi.",
+    "progress": "🎁 Siz yozuv evaziga bepul oyni yoqqansiz.\nYozuv bilan muvaffaqiyatli yuborilgan e'lonlar: {count} / 100. 100 tadan keyin yozuv qo'shilmaydi. 100 taga yetguncha bepul oy tugaganidan keyin ham qo'shiladi. Siz rozilik bergan yozuv:",
+    "preview": "Umumiy hisoblagich 100 ta muvaffaqiyatli yuborishga yetguncha yozuv avtomatik qo'shiladi.",
+    "ineligible": "Birinchi bepul oy taklifidan allaqachon foydalangansiz yoki u sizning tarifingiz uchun mavjud emas. «Sozlamalar → Tarif» bo'limini oching.",
+    "content_too_long": "Faol e'lonlardan biriga yozuv sig'maydi: aloqa ma'lumotlari bilan uzunligi 4096 belgidan oshadi. Matnni qisqartiring yoki shu e'lonni pauzaga qo'ying va taklifni qayta tasdiqlang. Bepul oy hozircha yoqilmadi."
   },
   "tariff": {
     "notification_trial": "Sinov muddati {until} da tugaydi (Toshkent), bir sutkadan kam qoldi. Yuborish davom etishi uchun «Tarif»ni ochib, administratorga murojaat qiling.",

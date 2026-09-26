@@ -110,7 +110,11 @@ E’lonni o‘chirish uchun «O'chirish»ni bosib tasdiqlang. Bot guruhlarga old
 
 **Narxi qancha?**
 
-Birinchi e'lon ishga tushirilgandan boshlab 7 kun bepul. Keyin 30 kun uchun 20 000 so'm. To'lov va tarifni yoqish uchun «✉️ Admin bilan bog'lanish» orqali yozing. Tarifni admin yoqadi. Muddatni «⚙️ Sozlamalar» → «💳 Tarif» bo'limida ko'rishingiz mumkin.
+Oddiy variant — birinchi e'lon ishga tushirilgandan boshlab bot yozuvisiz 7 kun bepul. Keyin 30 kun uchun 20 000 so'm. To'lov va tarifni yoqish uchun «✉️ Admin bilan bog'lanish» orqali yozing. Tarifni admin yoqadi. Muddatni «⚙️ Sozlamalar» → «💳 Tarif» bo'limida ko'rishingiz mumkin.
+
+«Tarif» bo'limida «Birinchi oy bepul» taklifi mavjud bo'lsa, rozilik bergan vaqtingizdan 30 kun bepul foydalanishingiz mumkin. Buning evaziga dastlabki 100 ta muvaffaqiyatli yuborilgan e'lon oxiriga sizga ko'rsatilgan matn va bot havolasi qo'shiladi. Rozilik berishdan oldin yozuv va shartlarni o'qing. Taklifdan birinchi to'lovgacha bir marta foydalanish mumkin: oddiy sinov muddati boshlanishidan oldin yoki u boshlanganidan keyin 30 kun ichida. Bu 30 kun qolgan sinov muddatini almashtiradi, unga qo'shilmaydi. Rad etilsa, oddiy shartlar saqlanadi.
+
+Hisoblagich barcha e'lonlar uchun umumiy: bir guruhga yuborilgan e'lon, jumladan rasmlar albomi, bitta yuborish hisoblanadi. Xatolar va bir yuborishning takroriy urinishlari hisoblanmaydi. 100 ta muvaffaqiyatli yuborishdan so'ng yozuv qo'shilmaydi, bepul foydalanish esa 30 kun oxirigacha qoladi. Oy oldin tugasa, yozuv 100 tagacha, jumladan pullik tarifda ham qo'shiladi. Bepul muddat uzaymaydi, avtomatik pul yechilmaydi. Natijani «Tarif» bo'limida ko'rasiz; e'lonni o'chirish yoki botni qayta ishga tushirish hisoblagichni nolga tushirmaydi.
 
 Muddat tugashiga bir sutkadan kam qolganda bot eslatadi. Muddat tugagani va tarif faollashtirilgani haqida ham xabar beradi. To‘lovdan keyin yoqilgan e’lonlar jadval bo‘yicha davom etadi. O‘zingiz to‘xtatgan e’lonlar pauzada qoladi.
 

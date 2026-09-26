@@ -4,7 +4,7 @@ import { Database, Postgres } from "./db";
 import { logError } from "./log";
 
 export async function migrate(database: Database) {
-  const migrations = await Promise.all(["001_typescript", "002_group_cache", "003_sending_window", "004_admin_billing_support", "005_user_language", "006_template_settings", "007_admin_browser_broadcasts", "008_photo_message_sources", "009_delivery_controls", "010_login_security"].map(async version =>
+  const migrations = await Promise.all(["001_typescript", "002_group_cache", "003_sending_window", "004_admin_billing_support", "005_user_language", "006_template_settings", "007_admin_browser_broadcasts", "008_photo_message_sources", "009_delivery_controls", "010_login_security", "011_promotion_trial"].map(async version =>
     ({ version, sql: await readFile(`migrations/${version}.sql`, "utf8") })));
   await database.transaction(async db => {
     await db.query("SELECT pg_advisory_xact_lock(809142026)");

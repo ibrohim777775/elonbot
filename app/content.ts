@@ -10,6 +10,7 @@ export function renderText(announcement: Record<string, any>) {
     const match = /^(?:@|(?:https?:\/\/)?t\.me\/)?([A-Za-z0-9_]{4,32})\/?$/.exec(contact);
     parts.push(match ? `Telegram: <a href="https://t.me/${match[1]}">@${match[1]}</a>` : `Telegram: ${escape(contact)}`);
   }
+  if (announcement.promotion_footer) parts.push(`\n${escape(announcement.promotion_footer)}`);
   return parts.join("\n");
 }
 // Match the transport's parsed UTF-16 text, including contacts, rather than HTML markup.

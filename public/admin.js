@@ -10,6 +10,21 @@ const dl = pairs => `<dl class="data">${pairs.map(([key, value]) => `<dt>${esc(k
 const minute = v => `${String(Math.floor(v / 60)).padStart(2, "0")}:${String(v % 60).padStart(2, "0")}`;
 const windowText = r => r.send_start_minute == null ? "Круглосуточно" : `${minute(r.send_start_minute)}–${minute(r.send_end_minute)}${r.send_start_minute > r.send_end_minute ? " (через полночь)" : ""}`;
 const tabNames = { profile: "Профиль", announcements: "Объявления", groups: "Группы", templates: "Шаблоны", deliveries: "Отправки", tariffs: "Тарифы", messages: "Переписка", notifications: "Ответы в группах" };
+function promotionForm(data) {
+  const link = data.bot_username ? `https://t.me/${data.bot_username}` : "";
+  return `<form id="promotion-form" class="panel" data-revision="${data.revision}" data-link="${esc(link)}">
+    <h2>30 дней за подпись в первых 100 публикациях</h2>
+    <p>Пользователь видит точный текст и сам подтверждает условия. Месяц начинается сразу после согласия. Одна публикация в одну группу, включая альбом с фото, считается за одну отправку.</p>
+    <p class="subtle">После 100 успешных отправок подпись исчезает. Если месяц закончился раньше, она остаётся до 100 отправок, включая платный тариф. Бесплатный срок не продлевается. Предложение доступно один раз до первой оплаты, до начала пробного срока или в течение 30 дней после его начала.</p>
+    <label for="promotion-enabled">Предлагать новым участникам</label><select id="promotion-enabled" name="enabled"><option value="true" ${data.enabled ? "selected" : ""}>Да</option><option value="false" ${!data.enabled ? "selected" : ""}>Нет</option></select>
+    <div class="grid-two">${[["uz", "Узбекский"], ["ru", "Русский"]].map(([lang, label]) => `<section><label for="promotion-${lang}">${label}: текст подписи</label><textarea id="promotion-${lang}" name="text_${lang}" rows="4" maxlength="500" required>${esc(data[`text_${lang}`])}</textarea><p class="subtle">До 500 символов. Ссылка на этого бота добавляется автоматически.</p><p>Как увидит пользователь:</p><div class="text" id="promotion-preview-${lang}">${esc(data[`text_${lang}`])}\n${esc(link)}</div></section>`).join("")}</div>
+    <p class="subtle">Изменения действуют только для новых согласий. Для уже участвующих сохраняются текст, который они приняли, срок и счётчик. Выключение предложения тоже не меняет их условия. Обычный пробный тариф — 7 дней без подписи.</p>
+    <div class="actions"><button type="submit">Сохранить условия</button></div></form>`;
+}
+function promotionProfile(data) {
+  const p = data.promotion;
+  return p ? `<section class="panel"><h3>Бесплатный месяц с подписью</h3>${dl([["Согласие", fmt(p.accepted_at)], ["Бесплатный месяц до", fmt(p.ends_at)], ["Отправлено с подписью", `${p.sent_count} / 100`], ["Осталось", 100 - p.sent_count], ["Язык подписи", p.language === "uz" ? "Узбекский" : "Русский"]])}<div class="text">${esc(p.footer)}</div><p class="subtle">Счётчик общий для всех объявлений. Оплата и удаление объявлений его не сбрасывают.</p></section>` : "";
+}
 let tg, auth, authorized = false, browserLink, route = {}, generation = 0, currentUser, pendingTariff, mutation = false;
 const drafts = new Map(), blobs = new Set(), pendingReplies = new Map(), pendingTariffs = new Map();
 const errors = { UNAUTHORIZED: "Откройте админку командой /admin в Telegram-боте.", AUTH_EXPIRED: "Вход истёк. Закройте админку и откройте её заново командой /admin.", FORBIDDEN: "Нет доступа. Ваш Telegram ID должен быть указан в ADMIN_IDS.", INVALID_ORIGIN: "Адрес страницы не совпадает с BASE_URL сервера.", RATE_LIMITED: "Слишком много запросов. Подождите минуту.", NOT_FOUND: "Запись не найдена. Обновите список.", CONFLICT: "Этот запрос уже использован с другими данными. Обновите страницу.", INVALID_TEXT: "Введите текст ответа от 1 до 3500 символов.", FILE_TOO_LARGE: "Вложение превышает лимит загрузки 20 МБ.", FILE_UNAVAILABLE: "Telegram пока не отдал вложение. Попробуйте позже." };
@@ -87,9 +102,9 @@ async function load() {
   const parsed = Object.fromEntries(new URLSearchParams(location.hash.slice(1)));
   route = { view: "overview", tab: "profile", page: "1", ...parsed };
   if (!tabNames[route.tab]) route.tab = "profile";
-  if (!["overview", "users", "inbox", "broadcasts"].includes(route.view)) route.view = "overview";
+  if (!["overview", "users", "inbox", "broadcasts", "promotion"].includes(route.view)) route.view = "overview";
   const user = route.user && /^[1-9][0-9]{0,17}$/.test(route.user) ? route.user : null;
-  $("#heading").textContent = user ? "Карточка пользователя" : { overview: "Обзор", users: "Пользователи", inbox: "Обращения", broadcasts: "Рассылки" }[route.view];
+  $("#heading").textContent = user ? "Карточка пользователя" : { overview: "Обзор", users: "Пользователи", inbox: "Обращения", broadcasts: "Рассылки", promotion: "Бесплатный месяц" }[route.view];
   document.querySelectorAll("[data-nav]").forEach(a => a.classList.toggle("active", a.dataset.nav === (user ? "users" : route.view)));
   $("#content").setAttribute("aria-busy", "true");
   $("#content").innerHTML = `<p class="empty">Загружаем данные…</p>`;
@@ -100,7 +115,7 @@ async function load() {
       const data = tab === "profile" ? detail : await api(`/users/${user}/${tab === "messages" ? `messages${route.before ? `?before=${encodeURIComponent(route.before)}` : ""}` : `records?kind=${tab}&page=${encodeURIComponent(route.page)}`}`);
       if (turn !== generation) return;
       currentUser = detail; $("#content").innerHTML = profileShell(detail);
-      $("#user-content").innerHTML = tab === "profile" ? profile(data) : tab === "messages" ? messages(data) : records(data);
+      $("#user-content").innerHTML = tab === "profile" ? profile(data) + promotionProfile(data) : tab === "messages" ? messages(data) : records(data);
       if (tab === "messages" && data.rows.length) await api(`/users/${user}/read`, { throughId: String(data.rows.at(-1).id) });
     } else if (route.view === "broadcasts") {
       const content = await broadcasts.render(route);
@@ -110,7 +125,7 @@ async function load() {
       const query = new URLSearchParams({ page: route.page, search: route.search || "", status: route.status || "" });
       const data = await api(`/${route.view}${route.view === "overview" ? "" : `?${query}`}`);
       if (turn !== generation) return;
-      $("#content").innerHTML = route.view === "overview" ? overview(data) : route.view === "users" ? users(data) : inbox(data);
+      $("#content").innerHTML = route.view === "overview" ? overview(data) : route.view === "users" ? users(data) : route.view === "promotion" ? promotionForm(data) : inbox(data);
       if (route.view === "overview") $("#unread").textContent = data.unread ? num(data.unread) : "";
     }
   } catch (error) { if (turn === generation) { notice(error.message, true); if (!$("#user-content")) $("#content").innerHTML = `<p class="empty">Не удалось загрузить данные. Нажмите «Обновить».</p>`; } }
@@ -143,8 +158,26 @@ $("#tariff-form").addEventListener("submit", async event => {
 $("#dialog-cancel").addEventListener("click", () => { if (!mutation) $("#tariff-dialog").close(); });
 $("#tariff-dialog").addEventListener("cancel", event => { if (mutation) event.preventDefault(); });
 $("#content").addEventListener("input", event => { if (event.target.id === "reply-text") drafts.set(route.user, event.target.value); });
+$("#content").addEventListener("input", event => {
+  const form = event.target.closest("#promotion-form");
+  if (!form) return;
+  for (const lang of ["uz", "ru"]) $(`#promotion-preview-${lang}`).textContent = `${form.elements[`text_${lang}`].value.trim()}\n${form.dataset.link}`;
+});
 $("#content").addEventListener("submit", async event => {
   event.preventDefault();
+  if (event.target.id === "promotion-form") {
+    if (mutation) return;
+    const form = event.target, payload = Object.fromEntries(new FormData(form));
+    payload.enabled = payload.enabled === "true"; payload.revision = Number(form.dataset.revision);
+    mutation = true;
+    for (const input of form.elements) input.disabled = true;
+    try {
+      const result = await api("/promotion", payload); form.dataset.revision = result.revision;
+      notice("Условия сохранены. Уже принятые пользователями подписи остались прежними.");
+    } catch (error) { notice(`${error.message} Если условия уже изменились, нажмите «Обновить» и проверьте их.`, true); }
+    finally { mutation = false; for (const input of form.elements) input.disabled = false; }
+    return;
+  }
   if (event.target.id === "search-form") { location.hash = href({ view: "users", ...Object.fromEntries(new FormData(event.target)), page: "1" }); return; }
   if (event.target.id !== "reply-form" || mutation) return;
   const user = route.user, input = $("#reply-text"), text = input.value.trim(), button = event.target.querySelector("button");

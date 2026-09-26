@@ -2,6 +2,7 @@ import { Api } from "grammy";
 import { Config } from "./config";
 import { Database, lockUser, one } from "./db";
 import { planState, tariff } from "./billing";
+import { enrollment, promotionSettings, savePromotionSettings } from "./promotion";
 import { enqueueNotification } from "./notifications";
 import { photosOf, photoMessageIds, photoCount } from "./media";
 import { TelegramTransport } from "./accounts";
@@ -39,6 +40,14 @@ export class Admin {
     this.authorize(identity);
     const db = this.database, page = pageOf(query), offset = (page - 1) * 20;
     if (method === "POST" && path === "/admin-api/browser-link") return this.browser.link(identity);
+    if (path === "/admin-api/promotion") {
+      if (method === "GET") {
+        const settings = await promotionSettings(db), bot = await this.api.getMe();
+        return { ...settings, bot_username: bot.username };
+      }
+      if (method === "POST") return savePromotionSettings(db, String(identity.id), payload);
+      throw new Failure("NOT_FOUND");
+    }
     if (path === "/admin-api/broadcast-templates") {
       if (method === "GET") return this.broadcasts.templates();
       if (method === "POST") return this.broadcasts.saveTemplate(payload);
@@ -93,7 +102,7 @@ export class Admin {
     if (method === "GET" && !match[2]) {
       const account = await one(db, "SELECT telegram_id,created_at,updated_at,retry_after FROM telegram_accounts WHERE user_id=$1", [id]);
       const draft = await one(db, `SELECT data->>'kind' AS kind,data->>'step' AS step,updated_at FROM user_states WHERE user_id=$1 AND updated_at>now()-interval '1 day'`, [id]);
-      return { user, plan: planState(user), tariff, account, draft };
+      return { user, plan: planState(user), tariff, account, draft, promotion: await enrollment(db, id) ?? null };
     }
     if (method === "GET" && match[2] === "records") return this.records(id, query.get("kind") ?? "announcements", page);
     if (method === "GET" && match[2] === "messages") {

@@ -8,6 +8,7 @@ import { t, languageOf, languages, translations, withLanguage, changeLanguage, c
 import { Failure } from "./telegram";
 import { logError } from "./log";
 import { planState, requireCreationAccess } from "./billing";
+import { acceptPromotion, enrollment, pendingPromotionFooter, promotionOffer } from "./promotion";
 import { Support } from "./support";
 import { botCommands } from "./commands";
 import { AdminAuth } from "./admin-auth";
@@ -98,9 +99,11 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       }
       catch (error) {
         if (!(error instanceof Failure)) throw error;
-        if (error.code === "SUBSCRIPTION_EXPIRED") { await tariffMenu(ctx); }
+        if (["SUBSCRIPTION_EXPIRED", "PROMOTION_CHANGED"].includes(error.code)) { await tariffMenu(ctx); }
         else {
-        const key = error.code === "TEMPLATE_GROUPS_UNAVAILABLE" ? "templates.groups_unavailable" :
+        const key = error.code === "PROMOTION_INELIGIBLE" ? "promotion.ineligible" :
+          error.code === "PROMOTION_CONTENT_TOO_LONG" ? "promotion.content_too_long" :
+          error.code === "TEMPLATE_GROUPS_UNAVAILABLE" ? "templates.groups_unavailable" :
           error.code === "SUPPORT_CONTENT_REQUIRED" ? "support.content_required" :
           error.code === "LOGIN_REQUIRED" || error.code === "ALREADY_CONNECTED" ? "account.connect_prompt" :
           error.code === "ANNOUNCEMENT_GROUP_LIMIT" ? "validation.announcement_group_limit" :
@@ -147,8 +150,21 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     const user = await one(ctx.db, "SELECT trial_started_at,trial_ends_at,paid_until FROM users WHERE id=$1", [ctx.userId]);
     const plan = planState(user);
     const until = plan.until ? new Intl.DateTimeFormat("ru-RU", { timeZone: "Asia/Tashkent", dateStyle: "short", timeStyle: "short" }).format(plan.until) : "";
-    await show(ctx, `${t(`tariff.${plan.status}`, { until })}\n\n${t("tariff.conditions")}`,
-      button("menu.support", "support:open").row().text(t("common.back"), "settings:open"));
+    const joined = await enrollment(ctx.db, ctx.userId);
+    const offer = await promotionOffer(ctx.db, ctx.userId, currentLanguage(), bot.botInfo.username);
+    const keyboard = new InlineKeyboard();
+    if (offer) keyboard.text(t("promotion.accept"), `promo:accept:${offer.revision}:${offer.language}`).row();
+    keyboard.text(t("menu.support"), "support:open").row().text(t("common.back"), "settings:open");
+    const details = joined ? `\n\n${t("promotion.progress", { count: joined.sent_count })}\n\n${joined.footer}`
+      : offer ? `\n\n${t("promotion.offer", { footer: offer.footer })}` : "";
+    await show(ctx, `${t(`tariff.${plan.status}`, { until })}\n\n${t(joined ? "promotion.conditions" : "tariff.conditions")}${details}`, keyboard);
+  }
+  async function offerPromotion(ctx: Ctx) {
+    const offer = await promotionOffer(ctx.db, ctx.userId, currentLanguage(), bot.botInfo.username);
+    if (!offer) return;
+    await ctx.reply(t("promotion.offer", { footer: offer.footer }), { reply_markup: new InlineKeyboard()
+      .text(t("promotion.accept"), `promo:accept:${offer.revision}:${offer.language}`).row()
+      .text(t("promotion.decline"), "promo:decline") });
   }
   async function openSupport(ctx: Ctx) {
     ctx.wizard.support = true;
@@ -282,14 +298,15 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   const contentDescription = (w: Wizard) => [w.text, w.contact_name, w.contact_phone, w.contact_telegram].filter(Boolean).join("\n");
   async function showConfirmation(ctx: Ctx) {
     const w = ctx.wizard;
-    validateContent(w);
+    await validateContent(ctx, w);
     w.confirmationBack = w.step === "save_template" ? "save_template" : w.step === "first_run" ? "first_run" : w.fromTemplate ? "template" : "first_run";
     w.step = "confirm";
     const legacyPreview = !!w.photos?.length;
     await draftSources(ctx);
     if (!legacyPreview) await previewPhoto(ctx, w.photoMessageIds ?? []);
+    const footer = w.kind === "announcement" ? await pendingPromotionFooter(ctx.db, ctx.userId) : "";
     await show(ctx, `${t(w.kind === "template" ? "templates.preview" : "announcements.preview", {
-      text: contentDescription(w), interval: w.interval!, groups: w.groups!.length, window: windowDescription(w),
+      text: contentDescription(w) + (footer ? `\n\n${footer}\n\n${t("promotion.preview")}` : ""), interval: w.interval!, groups: w.groups!.length, window: windowDescription(w),
     })}\n\n${await draftDescription(ctx, w)}${draftPhotoCount(w) ? `\n\n${t("announcements.keep_photos")}` : ""}`, wizardBack(ctx, new InlineKeyboard()
       .text(t(w.kind === "template" ? "common.save" : "announcements.start"), w.kind === "template" ? "templates:save" : "ann:confirm")
       .text(t("common.cancel"), "ann:cancel")));
@@ -323,17 +340,18 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     }
     await showConfirmation(ctx);
   }
-  function validateContent(w: Wizard) {
+  async function validateContent(ctx: Ctx, w: Wizard) {
     if (!w.text || w.text.length > 4096 || !settingsReady(w) || draftPhotoCount(w) > maxAnnouncementPhotos) throw new Failure("INVALID_CONTENT");
-    validateLength(w);
+    await validateLength(ctx, w, w.kind !== "template");
   }
-  function validateLength(record: Record<string, any>) {
-    if (messageLength(record) > 4096) throw new Failure("MESSAGE_TOO_LONG");
+  async function validateLength(ctx: Ctx, record: Record<string, any>, includePromotion = true) {
+    const footer = includePromotion ? await pendingPromotionFooter(ctx.db, ctx.userId) : "";
+    if (messageLength({ ...record, promotion_footer: footer }) > 4096) throw new Failure("MESSAGE_TOO_LONG");
   }
   async function resumeAnnouncement(ctx: Ctx, record: any) {
     if (record.status === "deleted") throw new Failure("NOT_FOUND");
     if (record.status === "active") return;
-    validateLength(record);
+    await validateLength(ctx, record);
     if (!validSendingWindow(record)) throw new Failure("INVALID_SENDING_WINDOW");
     await accounts.params(ctx.db, ctx.userId);
     const targets = await one(ctx.db, `SELECT count(*)::int total, count(*) FILTER(WHERE ug.is_active AND ug.can_post)::int available
@@ -352,7 +370,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
   const saveTemplate = async (ctx: Ctx) => {
     const w = ctx.wizard;
     if (w.templateId || w.fromTemplate) throw new Failure("NOT_FOUND");
-    validateContent(w);
+    await validateContent(ctx, { ...w, kind: "template" });
     await draftSources(ctx);
     const values = [ctx.userId, w.text, null, JSON.stringify([]), w.interval, w.mode,
       w.send_start_minute ?? null, w.send_end_minute ?? null, w.contact_phone ?? null, w.contact_telegram ?? null, w.contact_name ?? null];
@@ -458,6 +476,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       await ctx.reply(t("account.connect_prompt"), { reply_markup: button("account.connect", "account:connect")
         .row().text(t("common.back"), "settings:open") });
     }
+    await offerPromotion(ctx);
   }
   bot.command(["start", "boshlash"], async ctx => {
     if (ctx.wizard.step === "welcome_language") await welcomeLanguage(ctx);
@@ -513,6 +532,21 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     if (ctx.callbackQuery.data === "settings:open") { await settingsMenu(ctx); return; }
     if (ctx.callbackQuery.data === "settings:account") { await accountMenu(ctx); return; }
     if (ctx.callbackQuery.data === "settings:tariff") { await tariffMenu(ctx); return; }
+    if (ctx.callbackQuery.data === "promo:decline") {
+      if (await enrollment(ctx.db, ctx.userId)) { await tariffMenu(ctx); return; }
+      await show(ctx, t("promotion.declined"), button("common.back", "menu:main")); return;
+    }
+    if (ctx.callbackQuery.data.startsWith("promo:accept:")) {
+      const [, , version, language] = ctx.callbackQuery.data.split(":");
+      if (language !== currentLanguage() || !/^\d+$/.test(version ?? "")) { await tariffMenu(ctx); return; }
+      if (await enrollment(ctx.db, ctx.userId)) { await tariffMenu(ctx); return; }
+      const joined = await acceptPromotion(ctx.db, ctx.userId, currentLanguage(), bot.botInfo.username!, Number(version));
+      const until = new Intl.DateTimeFormat(currentLanguage() === "ru" ? "ru-RU" : "uz-UZ", {
+        timeZone: "Asia/Tashkent", dateStyle: "short", timeStyle: "short" }).format(new Date(joined.ends_at));
+      await show(ctx, t("promotion.activated", { until, count: joined.sent_count }), button("menu.tariff", "settings:tariff")
+        .row().text(t("common.back"), "menu:main"));
+      ctx.sendNow = true; return;
+    }
     if (ctx.callbackQuery.data === "settings:language") { await languageMenu(ctx); return; }
     if (ctx.callbackQuery.data === "menu:main") {
       delete ctx.wizard.support;
@@ -653,7 +687,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         const record = await owned(ctx, "announcements", w.editId);
         if (record.status === "deleted") throw new Failure("NOT_FOUND");
         const updated = { ...record, text: w.text ?? record.text };
-        validateLength(updated);
+        await validateLength(ctx, updated);
         if (record.status === "paused" && record.pause_reason === "photo_source_missing") await resumeAnnouncement(ctx, updated);
         await ctx.db.query(`UPDATE announcements SET photo_file_id=NULL,photo_file_ids='[]',photo_message_ids=$3,
           text=COALESCE($4,text),updated_at=now() WHERE id=$1 AND user_id=$2`,
@@ -743,7 +777,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       const count = await one(ctx.db, "SELECT count(*)::int n FROM announcements WHERE user_id=$1 AND status='active'", [ctx.userId]);
       if (count.n >= config.maxAnnouncements) throw new Failure("ANNOUNCEMENT_LIMIT");
       if (!validSendingWindow(w)) throw new Failure("INVALID_SENDING_WINDOW");
-      validateContent(w);
+      await validateContent(ctx, w);
       await requireCreationAccess(ctx.db, ctx.userId, true);
       await draftSources(ctx);
       const next = nextSendingTime(new Date(Date.now() + (w.mode === "immediate" ? 0 : w.interval! * 60_000)), w);
@@ -830,10 +864,10 @@ export function createBot(config: Config, database: Database, accounts: Accounts
         if (field === "contact") {
           const isTelegram = message.text.startsWith("@") || message.text.includes("t.me/");
           if (!isTelegram && message.text.length > 32) throw new Failure("INVALID_CONTACT");
-          validateLength({ ...record, contact_phone: isTelegram ? null : message.text, contact_telegram: isTelegram ? message.text : null });
+          await validateLength(ctx, { ...record, contact_phone: isTelegram ? null : message.text, contact_telegram: isTelegram ? message.text : null });
           await ctx.db.query(`UPDATE ${w.table} SET contact_phone=$3,contact_telegram=$4,updated_at=now() WHERE id=$1 AND user_id=$2`, [w.editId, ctx.userId, isTelegram ? null : message.text, isTelegram ? message.text : null]);
         } else {
-          validateLength({ ...record, [field === "name" ? "contact_name" : "text"]: message.text });
+          await validateLength(ctx, { ...record, [field === "name" ? "contact_name" : "text"]: message.text });
           await ctx.db.query(`UPDATE ${w.table} SET ${field === "name" ? "contact_name" : "text"}=$3,updated_at=now() WHERE id=$1 AND user_id=$2`, [w.editId, ctx.userId, message.text]);
         }
       } else { await ctx.reply(t(field === "photo" ? "templates.photo_required" : "common.error")); return; }
