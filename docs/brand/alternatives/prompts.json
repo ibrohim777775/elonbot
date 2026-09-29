@@ -1,0 +1,26 @@
+{
+  "mode": "built-in image_gen",
+  "concepts": [
+    {
+      "number": 1,
+      "title": "Объявления",
+      "file": "01-announcement.png",
+      "prompt": "Use case: logo-brand. Create ONE distinct new logo concept for Elonbot, an independent Uzbek Telegram announcement scheduling service. Concept 1: 'Announcement'. An elegant, original geometric megaphone fused into a single rounded speech-bubble silhouette. Very simple and bold, premium modern app icon, smooth corners, one large contiguous mark with well-designed negative space. The megaphone horn faces diagonally up-right; the chat-tail is integrated subtly at bottom-left. No little sound lines, no extra symbols. Existing brand colors: full-bleed solid dark forest green #245940; one pale lime #D5EF83 emblem. Square 1:1 finished avatar. All emblem bounds within central 62% of square, centered optically, generous margin suitable for circular Telegram cropping. Flat vector-like graphic, excellent legibility at 32px. No text, no letters, no E monogram, no robot, no paper airplane, no gradients, no noise, no texture, no shadows, no 3D, no border, no mockup, no collage, no watermark. Deliver only one finished icon.",
+      "transparent_background": false
+    },
+    {
+      "number": 2,
+      "title": "Расписание",
+      "file": "02-schedule.png",
+      "prompt": "Use case: logo-brand. Create ONE new original square avatar logo for Elonbot, the announcement scheduler for Telegram groups. Concept 2: 'On time'. A bold geometric circular clock whose upper-right quadrant opens into a forward/send arrow, all integrated as a single custom symbol; the two simple substantial clock hands remain unmistakable in the negative space. It should communicate scheduled sending, movement and reliability. Flat, beautifully balanced, contemporary professional digital-product logo. Visually different from a speech bubble and from a letter monogram. Brand-compatible palette: solid warm pale cream #F7F8F2 full-bleed background, deep forest green #245940 main symbol, a tiny restrained lime #B5D665 accent only if structurally useful. Square 1:1 final icon, circular-crop safe, symbol within central 62% with generous margins. Thick geometry and generous open spaces, readable at 32px. No typography, no text, no numerals, no 12 hour marks, no E, no bot face, no Telegram paper-plane trademark, no gradient, no texture, no noise, no shadow, no 3D, no border, no mockup, no contact sheet, no watermark. Deliver one finished icon only.",
+      "transparent_background": false
+    },
+    {
+      "number": 3,
+      "title": "Одно сообщение — несколько групп",
+      "file": "03-broadcast.png",
+      "prompt": "Use case: logo-brand. Create ONE original new avatar logo concept for Elonbot, an independent service for sending one prepared announcement to multiple selected Telegram groups. Concept 3: 'One message, many groups'. A compact, beautifully designed routing symbol: one bold rounded speech bubble on the left, connected via a short substantial branching line to three large rounded recipient dots arranged vertically on the right. Everything optically integrated as one cohesive logomark, balanced widths, deliberate negative space, very minimal, understandable as one-to-many communication. The bubble has one single wide horizontal cutout representing a message line; no tiny details. Palette related to the existing green brand but distinct: solid very dark green #143D32 full-bleed background, warm white #F7F8F2 speech bubble and connectors, pale lime #D5EF83 recipient nodes. Square 1:1 ready-to-upload avatar. All mark bounds within central 62% of square for safe circular crop. Bold smooth geometry, flat vector-like art, readable at 32px. No text, no letters, no E monogram, no bot face, no clock, no megaphone, no Telegram paper plane, no gradients, no texture, no shadows, no 3D, no mockup, no contact sheet, no border, no watermark. Deliver only the final single icon.",
+      "transparent_background": false
+    }
+  ]
+}

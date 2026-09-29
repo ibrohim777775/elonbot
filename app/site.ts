@@ -25,7 +25,8 @@ export async function sitePage(language: Language, config: Config, db: Queryable
   const plans = settings?.plans ?? [], basic = plans.find(p => p.code === "basic");
   const structured = JSON.stringify({ "@context": "https://schema.org", "@graph": [
     { "@type": "WebSite", "@id": `${config.siteUrl}/#website`, name: "Elonbot", url: `${config.siteUrl}/uz`, inLanguage: ["uz", "ru"] },
-    { "@type": "Organization", "@id": `${config.siteUrl}/#organization`, name: "Elonbot", url: config.siteUrl, sameAs: [botUrl] },
+    { "@type": "Organization", "@id": `${config.siteUrl}/#organization`, name: "Elonbot", url: config.siteUrl,
+      logo: { "@type": "ImageObject", url: `${config.siteUrl}/site-assets/brand/announcement-v1.png`, width: 1254, height: 1254 }, sameAs: [botUrl] },
     { "@type": "Service", "@id": `${config.siteUrl}/${language}#service`, name: language === "ru" ? "Отправка объявлений в Telegram по расписанию" : "Telegram guruhlariga jadval bo'yicha e'lon yuborish",
       url: `${config.siteUrl}/${language}`, provider: { "@id": `${config.siteUrl}/#organization` },
       offers: plans.map(p => ({ "@type": "Offer", price: p.price_sum, priceCurrency: "UZS", url: `${config.siteUrl}/${language}#plan-${p.code}`,

@@ -1,0 +1,17 @@
+{
+  "mode": "built-in image_gen",
+  "avatar": {
+    "prompt": "Use case: logo-brand. Create a finished square avatar logo for Elonbot, an independent Uzbek service that sends a user's prepared announcements to their chosen Telegram groups on a schedule. Asset: a single ready-to-upload bot/channel avatar, not a presentation sheet. Design an original, confident, extremely simple geometric monogram E fused with a forward-send arrow. Three substantial horizontal strokes connected by a softly rounded left spine form a recognizable capital E; the central stroke seamlessly becomes a compact right-pointing arrow. Make the silhouette feel like a message being sent. One coherent bold glyph, generous negative space and optically balanced proportions, legible at 32px. Flat vector-like design, smooth clean edges. Existing brand palette: solid deep forest green #245940 full-bleed background; monogram entirely pale lime #D5EF83. Square 1:1 canvas, mark centered with its complete bounds within the central 64% of canvas, circular-crop safe. No typography, no brand name, no tagline, no separate objects, no paper airplane, no robot face, no Telegram trademark, no gradients, no shadows, no 3D, no textures, no thin lines, no mockup, no border, no watermark. Produce only the final logo image.",
+    "file": "public/site/brand/avatar-v1.png"
+  },
+  "horizontal_logo": {
+    "prompt": "Use case: logo-brand. Input image is the approved Elonbot avatar; preserve the EXACT geometric E-with-forward-arrow symbol silhouette from it, its rounded corners and proportions. Create a horizontal logo lockup on a genuinely transparent background (alpha, not a white or checkerboard canvas). Left: the same emblem recolored one solid deep forest green #245940, no square tile behind it. Right: the exact lowercase word \"elonbot\" in a sophisticated bold geometric sans-serif with slightly rounded terminals, deep forest green #245940. Spell e-l-o-n-b-o-t exactly. The icon and wordmark must feel balanced, the word about 70% as tall as the icon, a generous but compact gap. Overall aspect ratio around 3:1, content occupies roughly 90% of width with 5% clear margins and no large vertical padding. Flat, sharp, clean vector-like shapes. No gradients, no noise, no texture, no shadows, no 3D, no tagline, no additional text, no dot after the word, no decorative elements, no mockup. The result is a reusable website logo PNG. Keep the original symbol recognizable and do not redesign it.",
+    "reference": "public/site/brand/avatar-v1.png",
+    "transparent_background": true,
+    "file": "public/site/brand/logo-horizontal-v1.png"
+  },
+  "favicon": {
+    "method": "Native SVG adaptation of the generated E-arrow monogram for the existing website icon system",
+    "file": "public/site/brand/favicon-v1.svg"
+  }
+}

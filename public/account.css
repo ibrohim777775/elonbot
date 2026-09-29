@@ -1,7 +1,8 @@
 :root { font-family: system-ui,sans-serif; color: #172630; background: #f0f5f7; }
 * { box-sizing: border-box; }
 main { max-width: 480px; margin: 8vh auto; padding: 32px; background: white; border-radius: 20px; }
-.brand { font-weight: 700; color: #05759f; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 750; font-size: 22px; letter-spacing: -.7px; color: #183e32; }
+.brand-mark { display: block; width: 36px; height: 36px; border-radius: 10px; flex-shrink: 0; }
 .account-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
 .account-header .brand { margin: 0; }
 .languages { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 12px; background: #edf4f7; }

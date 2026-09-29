@@ -14,3 +14,7 @@
 
 .price-grid.free-plans{grid-template-columns:repeat(2,minmax(0,1fr))}.free-plans:has(>.price-card:only-child){grid-template-columns:minmax(0,570px);justify-content:center}.tariff-explainer{max-width:780px;margin:22px auto 0;text-align:center;color:var(--muted);font-size:14px}.paid-plans .plan-description{font-weight:600;color:var(--ink)}
 @media(max-width:800px){.price-grid.free-plans{grid-template-columns:1fr}.tariff-explainer{text-align:left;max-width:530px;font-size:13px}}
+
+/* Shared Elonbot identity; explicit dimensions reserve space before PNG loads. */
+.brand-logo{display:block;width:46px;height:46px;object-fit:contain;border-radius:13px;margin-right:10px;flex-shrink:0}
+@media(max-width:480px){.brand-logo{width:38px;height:38px;border-radius:11px;margin-right:8px}}
