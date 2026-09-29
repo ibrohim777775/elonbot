@@ -27,16 +27,24 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env) {
   if (!normalizeIp(host)) throw new Error("HOST must be an IP address");
   const trustedProxyIps = (env.TRUSTED_PROXY_IPS ?? "127.0.0.1,::1").split(",").map(ip => ip.trim()).filter(Boolean);
   if (trustedProxyIps.some(ip => !normalizeIp(ip))) throw new Error("TRUSTED_PROXY_IPS must contain exact IP addresses");
+  const siteUrl = new URL(env.PUBLIC_SITE_URL?.trim() || baseUrl);
+  if (siteUrl.username || siteUrl.password || siteUrl.search || siteUrl.hash || siteUrl.pathname !== "/"
+    || (siteUrl.protocol !== "https:" && !(env.APP_ENV === "development" && siteUrl.protocol === "http:" && ["localhost", "127.0.0.1"].includes(siteUrl.hostname)))) throw new Error("PUBLIC_SITE_URL requires an HTTPS origin");
+  const publicBotUsername = env.PUBLIC_BOT_USERNAME?.trim().replace(/^@/, "") || "elonyuborishbot";
+  if (!/^[A-Za-z0-9_]{5,32}$/.test(publicBotUsername)) throw new Error("Invalid PUBLIC_BOT_USERNAME");
+  const publicChannelUrl = (env.PUBLIC_CHANNEL_URL ?? "https://t.me/+XE6Z-NQakcJkYjRi").trim().replace(/\/$/, "");
+  if (publicChannelUrl && !/^https:\/\/t\.me\/(?:[A-Za-z0-9_]{5,32}|\+[A-Za-z0-9_-]+|joinchat\/[A-Za-z0-9_-]+)$/.test(publicChannelUrl)) throw new Error("PUBLIC_CHANNEL_URL must be a Telegram channel URL or invite link");
+  if (env.SITE_INDEXABLE && !["true", "false"].includes(env.SITE_INDEXABLE)) throw new Error("SITE_INDEXABLE must be true or false");
   return {
     botToken: required("BOT_TOKEN"),
     databaseUrl: required("DATABASE_URL").replace(/^postgresql\+asyncpg:/, "postgresql:"),
     databaseSsl: env.DATABASE_SSL === "true", baseUrl, webhookSecret,
+    siteUrl: siteUrl.origin, publicBotUsername, publicChannelUrl, siteIndexable: env.SITE_INDEXABLE ? env.SITE_INDEXABLE === "true" : env.APP_ENV === "production",
     apiId: number("TELEGRAM_API_ID", 0), apiHash, encryptionKey: Buffer.from(key, "base64"),
     port: number("PORT", 8000), host, trustedProxyIps, adminIds,
     maxMessages: number("MAX_MESSAGES_PER_MINUTE", 20),
     maxChatMessages: number("MAX_MESSAGES_PER_CHAT_PER_MINUTE", 1),
     maxAnnouncements: number("MAX_ACTIVE_ANNOUNCEMENTS_PER_USER", 10),
-    maxGroupsPerAnnouncement: number("MAX_GROUPS_PER_ANNOUNCEMENT", 30),
   };
 }
 export type Config = ReturnType<typeof loadConfig>;

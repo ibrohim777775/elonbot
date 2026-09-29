@@ -13,11 +13,12 @@ function run(args, persistent = false) {
 let timer;
 const checkFrontend = () => {
   clearTimeout(timer);
-  timer = setTimeout(() => { for (const file of ["public/app.js", "public/account.js", "public/admin.js", "public/admin-broadcasts.js", "public/help.js"]) run(["--check", file]); }, 150);
+  timer = setTimeout(() => { for (const file of ["public/app.js", "public/account.js", "public/admin.js", "public/admin-broadcasts.js", "public/help.js", "public/site/site.js"]) run(["--check", file]); }, 150);
 };
 const watcher = watch("public", (_event, name) => { if (name?.endsWith(".js")) checkFrontend(); });
+const siteWatcher = watch("public/site", (_event, name) => { if (name?.endsWith(".js")) checkFrontend(); });
 function stop(code = 0) {
-  if (stopping) return; stopping = true; clearTimeout(timer); watcher.close();
+  if (stopping) return; stopping = true; clearTimeout(timer); watcher.close(); siteWatcher.close();
   for (const child of children) {
     // Stop the application child as well as tsx's watcher on Windows.
     if (process.platform === "win32" && child.pid) spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"], { stdio: "ignore", windowsHide: true });

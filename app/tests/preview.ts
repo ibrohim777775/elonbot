@@ -54,6 +54,8 @@ async function main() {
   });
   server.listen(0, "127.0.0.1"); await once(server, "listening");
   localConfig.baseUrl = `http://127.0.0.1:${(server.address() as any).port}`;
+  localConfig.siteUrl = localConfig.baseUrl;
+  console.log(`SITE_PREVIEW_URL=${localConfig.baseUrl}/uz`);
   console.log(`PREVIEW_URL=${localConfig.baseUrl}/app`);
   console.log(`ADMIN_PREVIEW_URL=${localConfig.baseUrl}/admin`);
   if (process.argv.includes("--browser")) console.log(`ADMIN_BROWSER_URL=${(await admin.browser.link({ id: 101, first_name: "Демо-администратор" })).url}`);

@@ -2,6 +2,7 @@ import { Api } from "grammy";
 import { Config } from "./config";
 import { Database, lockUser, one } from "./db";
 import { planState, tariff } from "./billing";
+import { planCodes, tariffCatalog, saveTariffCatalog, userGroupLimit } from "./tariffs";
 import { enrollment, promotionSettings, savePromotionSettings } from "./promotion";
 import { enqueueNotification } from "./notifications";
 import { photosOf, photoMessageIds, photoCount } from "./media";
@@ -14,7 +15,7 @@ import { Failure } from "./telegram";
 
 const statusSql = `CASE WHEN paid_until>now() THEN 'paid' WHEN trial_ends_at>now() THEN 'trial'
   WHEN trial_started_at IS NOT NULL THEN 'expired' ELSE 'not_started' END`;
-const profile = "u.id,u.telegram_id,u.username,u.first_name,u.language,u.created_at,u.updated_at,u.last_activity_at,u.trial_started_at,u.trial_ends_at,u.paid_until";
+const profile = "u.id,u.telegram_id,u.username,u.first_name,u.language,u.created_at,u.updated_at,u.last_activity_at,u.trial_started_at,u.trial_ends_at,u.paid_until,u.paid_plan_code,u.paid_group_limit,u.trial_group_limit";
 function pageOf(query: URLSearchParams) {
   const page = Number(query.get("page") ?? 1);
   if (!Number.isSafeInteger(page) || page < 1 || page > 1_000_000) throw new Failure("INVALID_REQUEST");
@@ -40,6 +41,11 @@ export class Admin {
     this.authorize(identity);
     const db = this.database, page = pageOf(query), offset = (page - 1) * 20;
     if (method === "POST" && path === "/admin-api/browser-link") return this.browser.link(identity);
+    if (path === "/admin-api/tariffs") {
+      if (method === "GET") return tariffCatalog(db);
+      if (method === "POST") return saveTariffCatalog(db, String(identity.id), payload);
+      throw new Failure("NOT_FOUND");
+    }
     if (path === "/admin-api/promotion") {
       if (method === "GET") {
         const settings = await promotionSettings(db), bot = await this.api.getMe();
@@ -73,7 +79,7 @@ export class Admin {
         (SELECT count(*)::int FROM delivery_logs WHERE status='failed' AND created_at>=date_trunc('day',now() AT TIME ZONE 'Asia/Tashkent') AT TIME ZONE 'Asia/Tashkent') failed_today,
         (SELECT count(*)::int FROM support_messages WHERE direction='in' AND read_at IS NULL) unread,
         (SELECT COALESCE(sum(amount_sum),0)::text FROM tariff_events WHERE action='activate') activations_sum`);
-      return { ...users, ...totals, tariff, admin: identity.first_name };
+      return { ...users, ...totals, tariff, catalog: await tariffCatalog(db), admin: identity.first_name };
     }
     if (method === "GET" && path === "/admin-api/users") {
       const search = (query.get("search") ?? "").trim().replace(/^@/, "").slice(0, 100), status = query.get("status") ?? "";
@@ -102,7 +108,7 @@ export class Admin {
     if (method === "GET" && !match[2]) {
       const account = await one(db, "SELECT telegram_id,created_at,updated_at,retry_after FROM telegram_accounts WHERE user_id=$1", [id]);
       const draft = await one(db, `SELECT data->>'kind' AS kind,data->>'step' AS step,updated_at FROM user_states WHERE user_id=$1 AND updated_at>now()-interval '1 day'`, [id]);
-      return { user, plan: planState(user), tariff, account, draft, promotion: await enrollment(db, id) ?? null };
+      return { user, plan: planState(user), tariff, catalog: await tariffCatalog(db), groupLimit: await userGroupLimit(db, id), account, draft, promotion: await enrollment(db, id) ?? null };
     }
     if (method === "GET" && match[2] === "records") return this.records(id, query.get("kind") ?? "announcements", page);
     if (method === "GET" && match[2] === "messages") {
@@ -120,22 +126,29 @@ export class Admin {
     if (method === "POST" && match[2] === "tariff") {
       const key = requestId(payload.requestId), action = payload.action, note = payload.note ?? "";
       if (!["activate", "revoke"].includes(action) || typeof note !== "string" || note.length > 500) throw new Failure("INVALID_REQUEST");
+      if (action === "activate" && (!planCodes.includes(payload.planCode) || !Number.isSafeInteger(payload.catalogRevision))) throw new Failure("INVALID_REQUEST");
       return db.transaction(async tx => {
         await lockUser(tx, id);
         // Also serialize request IDs reused for different users.
         await tx.query("SELECT pg_advisory_xact_lock(hashtextextended($1,0))", [`elonbot:tariff:${key}`]);
         const previous = await one(tx, "SELECT * FROM tariff_events WHERE request_id=$1", [key]);
         if (previous) {
-          if (String(previous.user_id) !== id || previous.action !== action || previous.note !== note) throw new Failure("CONFLICT");
+          if (String(previous.user_id) !== id || previous.action !== action || previous.note !== note
+            || (action === "activate" && (previous.plan_code !== payload.planCode || previous.catalog_revision !== payload.catalogRevision))) throw new Failure("CONFLICT");
           return previous;
         }
+        await tx.query("SELECT id FROM tariff_catalog WHERE id=1 FOR SHARE");
+        const catalog = await tariffCatalog(tx);
+        if (action === "activate" && catalog.revision !== payload.catalogRevision) throw new Failure("CONFLICT");
+        const selected = action === "activate" ? catalog.plans.find(p => p.code === payload.planCode)! : null;
         const before = await one(tx, "SELECT paid_until FROM users WHERE id=$1 FOR UPDATE", [id]);
         const after = await one(tx, `UPDATE users SET paid_until=${action === "activate" ? "GREATEST(now(),trial_ends_at,paid_until)+interval '30 days'" : "NULL"},updated_at=now() WHERE id=$1 RETURNING paid_until`, [id]);
-        const event = await one(tx, `INSERT INTO tariff_events(user_id,admin_telegram_id,request_id,action,amount_sum,previous_until,paid_until,note)
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8) RETURNING *`, [id, String(identity.id), key, action,
-          action === "activate" ? tariff.priceSum : 0, before.paid_until, after.paid_until, note]);
+        if (selected) await tx.query("UPDATE users SET paid_plan_code=$2,paid_group_limit=$3 WHERE id=$1", [id,selected.code,selected.group_limit]);
+        const event = await one(tx, `INSERT INTO tariff_events(user_id,admin_telegram_id,request_id,action,amount_sum,previous_until,paid_until,note,plan_code,group_limit,catalog_revision)
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`, [id, String(identity.id), key, action,
+          selected?.price_sum ?? 0, before.paid_until, after.paid_until, note, selected?.code ?? null, selected?.group_limit ?? null, catalog.revision]);
         if (action === "activate") await enqueueNotification(tx, id, `tariff_activated:${event.id}`, "tariff_activated", {
-          until: new Date(after.paid_until).toISOString(),
+          until: new Date(after.paid_until).toISOString(), groups: selected!.group_limit,
         });
         return event;
       });
@@ -148,7 +161,7 @@ export class Admin {
       templates: { from: "templates a", fields: `a.*,(SELECT json_agg(json_build_object('id',g.id,'title',g.title,'chat_id',g.chat_id)) FROM template_groups tg JOIN groups g ON g.id=tg.group_id WHERE tg.template_id=a.id) groups`, order: "a.id DESC" },
       groups: { from: "user_groups a JOIN groups g ON g.id=a.group_id", fields: "g.id,g.chat_id,g.title,g.chat_type,g.slow_mode_delay,g.verified_at,a.can_post,a.is_admin,a.is_active,a.connected_at,a.connected_by_telegram_id,a.retry_after", order: "a.id DESC" },
       deliveries: { from: "delivery_logs l JOIN announcements a ON a.id=l.announcement_id JOIN groups g ON g.id=l.group_id", fields: "l.id,l.announcement_id,l.scheduled_at,l.sent_at,l.created_at,l.status,l.error_code,l.telegram_message_id,l.telegram_message_ids,l.sender_telegram_id,g.title,g.chat_id", order: "l.id DESC" },
-      tariffs: { from: "tariff_events a", fields: "a.id,a.admin_telegram_id,a.action,a.amount_sum,a.previous_until,a.paid_until,a.note,a.created_at", order: "a.id DESC" },
+      tariffs: { from: "tariff_events a", fields: "a.id,a.admin_telegram_id,a.action,a.amount_sum,a.previous_until,a.paid_until,a.note,a.created_at,a.plan_code,a.group_limit", order: "a.id DESC" },
       notifications: { from: "reply_notifications a", fields: "a.chat_id,a.message_id,a.created_at", order: "a.created_at DESC" },
     };
     const source = sources[kind]; if (!source) throw new Failure("INVALID_REQUEST");

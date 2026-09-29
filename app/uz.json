@@ -36,6 +36,7 @@
   "menu": {
     "settings": "⚙️ Sozlamalar",
     "help": "📖 Qo'llanma",
+    "channel": "📢 Yangiliklar va videoqo'llanmalar",
     "language": "🌐 Язык / Til",
     "tariff": "💳 Tarif",
     "support": "✉️ Admin bilan bog'lanish",
@@ -187,28 +188,32 @@
       "waiting": "ayrim guruhlar keyingi urinishni kutmoqda",
       "ready": "yuborish navbatida",
       "scheduled": "jadval bo‘yicha yuborish yoqilgan",
-      "deleted": "o‘chirilgan"
+      "deleted": "o‘chirilgan",
+      "group_limit": "Pauza: tarif guruh limiti oshgan",
+      "telegram_restricted": "Pauza: Telegram yuborishni chekladi"
     },
     "rate_limited": "Telegram limiti sabab yuborish keyinroq davom ettiriladi.",
     "group_access_lost": "Guruhga yuborish to'xtatildi: akkauntingizda kerakli huquq yo'q yoki siz guruhdan chiqarilgansiz.",
     "photo_unavailable": "Rasmni ko'rsatib bo'lmadi. Asl xabarlar o'chirilgan bo'lsa, tayyor xabarni qayta yo'naltirib, e'londagi rasmlarni almashtiring yoki yangi shablon yarating.",
     "photo_source_missing": "E'lon yuborish to'xtatildi: rasmli xabarlar mavjud emas. «Rasmni o'zgartirish» tugmasini bosing, tayyor xabar yoki albomni qayta yo'naltiring va «Tayyor» tugmasini bosing. Bu xabarlarni bot chatidan o'chirmang.",
     "database_unavailable": "Vaqtinchalik texnik xatolik yuz berdi. Keyinroq qayta urinib ko'ring.",
-    "cleanup_partial": "{count} ta eski xabarni o'chirib bo'lmadi. Ularni Telegram orqali tekshiring."
+    "cleanup_partial": "{count} ta eski xabarni o'chirib bo'lmadi. Ularni Telegram orqali tekshiring.",
+    "group_limit_notice": "E'lon pauzada: joriy tarifda {groups} tagacha guruh mumkin. Tanlangan guruhlar saqlandi. Guruhlarni kamaytiring yoki mos tarifni ulang, keyin yuborishni davom ettiring.",
+    "telegram_restricted_notice": "Telegram akkauntdan yuborishni chekladi (PEER_FLOOD). Barcha faol e'lonlaringiz pauzaga qo'yildi. @SpamBot orqali cheklovni va guruh qoidalarini tekshiring. Faqat cheklov olib tashlangach yuborishni davom ettiring."
   },
   "statistics": {
     "title": "Statistika",
     "report": "{title}\n\nFoydalanuvchilar: {users}\nGuruhlar: {groups}\nFaol e'lonlar: {active}\nTo'xtatilgan e'lonlar: {paused}\nMuvaffaqiyatli yuborishlar: {sent}\nXatoliklar: {failed}"
   },
   "promotion": {
-    "offer": "🎁 Birinchi oy bepul — rozilik bergan vaqtingizdan 30 kun!\n\nBarcha guruhlaringizga muvaffaqiyatli yuborilgan dastlabki 100 ta e'lon oxiriga bot quyidagi yozuvni qo'shadi. Bir guruhga yuborilgan bitta e'lon, jumladan rasmlar albomi, bitta yuborish hisoblanadi. Xatolar va bir yuborishning takroriy urinishlari hisoblanmaydi.\n\nQo'shiladigan yozuv:\n{footer}\n\n100 ta yuborishdan so'ng yozuv qo'shilmaydi. 30 kunda 100 taga yetmasa, yozuv 100 tagacha, jumladan pullik tarifda ham qo'shiladi. Bepul muddat uzaymaydi. Keyin 30 kun uchun 20 000 so'm, avtomatik pul yechilmaydi.\n\nTaklifdan birinchi to'lovgacha bir marta foydalanish mumkin: sinov muddati boshlanishidan oldin yoki u boshlanganidan keyin 30 kun ichida. Bu 30 kun oddiy sinov muddatining qolgan qismini almashtiradi, unga qo'shilmaydi.",
+    "offer": "🎁 Birinchi oy bepul — rozilik bergan vaqtingizdan 30 kun!\n\nBarcha guruhlaringizga muvaffaqiyatli yuborilgan dastlabki {limit} ta e'lon oxiriga bot quyidagi yozuvni qo'shadi. Bir guruhga yuborilgan bitta e'lon, jumladan rasmlar albomi, bitta yuborish hisoblanadi. Xatolar va bir yuborishning takroriy urinishlari hisoblanmaydi.\n\nQo'shiladigan yozuv:\n{footer}\n\n{limit} ta yuborishdan so'ng yozuv qo'shilmaydi. 30 kunda {limit} taga yetmasa, yozuv {limit} tagacha, jumladan pullik tarifda ham qo'shiladi. Bepul muddat uzaymaydi. Bepul muddatdan keyin «Tarif» bo'limida pullik tarifni tanlang. Avtomatik pul yechilmaydi.\n\nTaklifdan birinchi to'lovgacha bir marta foydalanish mumkin: sinov muddati boshlanishidan oldin yoki u boshlanganidan keyin 30 kun ichida. Bu 30 kun oddiy sinov muddatining qolgan qismini almashtiradi, unga qo'shilmaydi.\n\nBepul oyda bitta e'lon uchun {groups} tagacha guruh.",
     "accept": "✅ Roziman — 30 kunni yoqish",
-    "conditions": "Bepul oydan keyin 30 kun uchun 20 000 so'm. Avtomatik pul yechilmaydi. To'lov va tarifni yoqish uchun adminga yozing.",
+    "conditions": "Bepul oydan keyin pullik tarifni tanlang. Avtomatik pul yechilmaydi. To'lov va tarifni yoqish uchun adminga yozing.",
     "decline": "Yozuvsiz davom etish",
-    "declined": "Yozuv evaziga bepul oy yoqilmadi. Oddiy shartlar: birinchi e'londan boshlab 7 kun bepul, keyin 30 kun uchun 20 000 so'm. Taklif mavjud bo'lsa, uni «Tarif» bo'limida qayta ochishingiz mumkin.",
-    "activated": "🎁 Bepul oy {until} gacha yoqildi (Toshkent vaqti).\n\nYozuv bilan yuborilgan e'lonlar: {count} / 100. 100 ta muvaffaqiyatli yuborishdan so'ng yozuv qo'shilmaydi. Oy oldin tugasa, yozuv 100 tagacha qoladi; oy tugagandan keyingi foydalanish alohida to'lanadi.",
-    "progress": "🎁 Siz yozuv evaziga bepul oyni yoqqansiz.\nYozuv bilan muvaffaqiyatli yuborilgan e'lonlar: {count} / 100. 100 tadan keyin yozuv qo'shilmaydi. 100 taga yetguncha bepul oy tugaganidan keyin ham qo'shiladi. Siz rozilik bergan yozuv:",
-    "preview": "Umumiy hisoblagich 100 ta muvaffaqiyatli yuborishga yetguncha yozuv avtomatik qo'shiladi.",
+    "declined": "Yozuv evaziga bepul oy yoqilmadi. Oddiy shartlar: birinchi e'londan boshlab 7 kun bepul, keyin o'zingiz tanlagan pullik tarif. Taklif mavjud bo'lsa, uni «Tarif» bo'limida qayta ochishingiz mumkin.",
+    "activated": "🎁 Bepul oy {until} gacha yoqildi (Toshkent vaqti).\n\nYozuv bilan yuborilgan e'lonlar: {count} / {limit}. {limit} ta muvaffaqiyatli yuborishdan so'ng yozuv qo'shilmaydi. Oy oldin tugasa, yozuv {limit} tagacha qoladi; oy tugagandan keyingi foydalanish alohida to'lanadi.\nBitta e'lon uchun {groups} tagacha guruh.",
+    "progress": "🎁 Siz yozuv evaziga bepul oyni yoqqansiz.\nYozuv bilan muvaffaqiyatli yuborilgan e'lonlar: {count} / {limit}. {limit} tadan keyin yozuv qo'shilmaydi. {limit} taga yetguncha bepul oy tugaganidan keyin ham qo'shiladi. Siz rozilik bergan yozuv:",
+    "preview": "Umumiy hisoblagich {limit} ta muvaffaqiyatli yuborishga yetguncha yozuv avtomatik qo'shiladi.",
     "ineligible": "Birinchi bepul oy taklifidan allaqachon foydalangansiz yoki u sizning tarifingiz uchun mavjud emas. «Sozlamalar → Tarif» bo'limini oching.",
     "content_too_long": "Faol e'lonlardan biriga yozuv sig'maydi: aloqa ma'lumotlari bilan uzunligi 4096 belgidan oshadi. Matnni qisqartiring yoki shu e'lonni pauzaga qo'ying va taklifni qayta tasdiqlang. Bepul oy hozircha yoqilmadi."
   },
@@ -221,7 +226,14 @@
     "trial": "Bepul tarif {until} gacha faol (Toshkent vaqti).",
     "paid": "Pullik tarif {until} gacha faol (Toshkent vaqti).",
     "expired": "Tarif muddati tugadi. E'lon yuborish to'xtatildi. E'lonlar va guruhlar saqlangan.",
-    "conditions": "Birinchi 7 kun bepul. Keyin 30 kun uchun 20 000 so'm. Pullik tarifni faqat admin yoqadi. To'lov va tarifni yoqish uchun adminga yozing."
+    "conditions": "Dastlabki 7 kun asosiy tarifning guruh limiti bilan bepul. To'lovdan so'ng admin 30 kunlik pullik tarifni yoqadi. Ko'proq guruh yuborishni tezlashtirmaydi va Telegram cheklovlarini bekor qilmaydi.",
+    "names": {
+      "basic": "Asosiy",
+      "standard": "Standart",
+      "pro": "Pro"
+    },
+    "plan_option": "{name}: {groups} tagacha guruh — {price} so'm / 30 kun",
+    "current_limit": "Joriy limitingiz: bitta e'lon uchun {groups} tagacha guruh."
   },
   "support": {
     "admin_notification": "Yangi murojaat: {name} (ID {id})",

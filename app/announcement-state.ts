@@ -37,7 +37,7 @@ export async function announcementState(db: Queryable, a: any, language = curren
     else if (!next || next <= now) reason = "ready";
     next = nextSendingTime(new Date(Math.max(Date.now(), next?.getTime() ?? 0)), a);
   }
-  if (["deleted", "manual", "no_groups", "photo_source_missing", "invalid_content", "expired", "account"].includes(reason)) next = null;
+  if (["deleted", "manual", "no_groups", "photo_source_missing", "invalid_content", "expired", "account", "group_limit", "telegram_restricted"].includes(reason)) next = null;
   const last = await one(db, "SELECT max(sent_at) AS at FROM delivery_logs WHERE announcement_id=$1", [a.id]);
   return t("delivery.card_state", { state: t(`delivery.state.${reason}`, {}, language),
     last: displayTime(last.at, language), next: displayTime(next, language) }, language)

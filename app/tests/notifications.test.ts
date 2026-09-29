@@ -35,7 +35,7 @@ test("renewal skips stale reminders, confirms once and never resumes manually pa
     const messages: any[] = [], api = { async sendMessage(...args: any[]) { messages.push(args); return { message_id: 1 }; } } as any;
     const worker = new Notifications(database, api);
     await worker.maintain();
-    const admin = new Admin(config, database, {} as any, api), payload = { action: "activate", requestId: randomUUID() };
+    const admin = new Admin(config, database, {} as any, api), payload = { action: "activate", planCode: "basic", catalogRevision: 1, requestId: randomUUID() };
     await admin.handle("POST", "/admin-api/users/1/tariff", { id: 101, first_name: "Admin" }, payload);
     await admin.handle("POST", "/admin-api/users/1/tariff", { id: 101, first_name: "Admin" }, payload);
     await worker.run(); await worker.run(); await worker.run();

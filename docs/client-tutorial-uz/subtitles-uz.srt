@@ -1,0 +1,67 @@
+1
+00:00:00,000 --> 00:00:06,000
+E'loningizni tayyorlang. Guruhlar va vaqtni tanlang. Qolganini bot bajaradi.
+
+2
+00:00:06,000 --> 00:00:13,000
+@elonyuborishbot ni oching. Start tugmasini, so'ng «O'zbekcha davom etish»ni bosing.
+
+3
+00:00:13,000 --> 00:00:18,000
+Bu videoda Telegram akkaunti oldindan ulangan. Keyingi qadam — guruhlarni tanlash.
+
+4
+00:00:18,000 --> 00:00:24,000
+«Guruhlar» bo'limini oching va «Guruh qo'shish» tugmasini bosing.
+
+5
+00:00:24,000 --> 00:00:33,000
+A'zo bo'lgan va e'lon berishga ruxsat etilgan guruhni tanlang. «Ulash», so'ng «Botga qaytish»ni bosing.
+
+6
+00:00:33,000 --> 00:00:38,000
+Botga qayting. «E'lonlarim» → «E'lon yaratish»ni tanlang.
+
+7
+00:00:38,000 --> 00:00:45,000
+E'lon matni va aloqa ma'lumotlarini yuboring. Rasmsiz e'lon uchun «Davom etish»ni bosing.
+
+8
+00:00:45,000 --> 00:00:55,000
+Tayyor xabar yoki albomni botga yo'naltiring: 10 tagacha rasm. Yuklanishini kutib, «Tayyor»ni bosing. Xabarlarni o'chirmang.
+
+9
+00:00:55,000 --> 00:01:02,000
+Ulangan guruhlardan shu e'lon uchun keraklilarini belgilang. Limit tarifingizga bog'liq. So'ng «Tayyor»ni bosing.
+
+10
+00:01:02,000 --> 00:01:08,000
+Yuborish oralig'ini tanlang. Misolda — 20 daqiqa. Guruh qoidalariga mos oraliqni belgilang.
+
+11
+00:01:08,000 --> 00:01:17,000
+Boshlanish va tugash vaqtini tanlang. Misolda: har kuni 07:00–22:00. Barcha vaqtlar Toshkent bo'yicha.
+
+12
+00:01:17,000 --> 00:01:25,000
+«Hozir yuborish» ham tanlangan soatlarga amal qiladi. «Jadval bo'yicha boshlash» — tanlangan oraliqdan keyin.
+
+13
+00:01:25,000 --> 00:01:31,000
+Keyin yana ishlatish uchun «Ha»ni bosing. Matn, rasmlar, guruhlar va jadval shablonda saqlanadi.
+
+14
+00:01:31,000 --> 00:01:39,000
+Matn, guruhlar va vaqtni tekshiring. Hammasi to'g'ri bo'lsa, «Ishga tushirish»ni bosing.
+
+15
+00:01:39,000 --> 00:01:46,000
+Natijani e'lon kartasida ko'ring. Yuborish ketma-ket bajariladi; Telegram cheklovlari sabab kutish mumkin.
+
+16
+00:01:46,000 --> 00:01:54,000
+Vaqtincha to'xtatish uchun «To'xtatib turish»ni bosing. «Davom ettirish» bilan yana ishga tushiring.
+
+17
+00:01:54,000 --> 00:02:01,000
+Yordam uchun «Qo'llanma» yoki /help ni oching. Oldingi bosqichga botdagi «Orqaga» tugmasi bilan qayting.

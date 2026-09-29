@@ -24,7 +24,8 @@ export function safeError(error: unknown): Failure {
   const rpcCode = typeof e?.errorMessage === "string" ? e.errorMessage : undefined;
   const code = error instanceof errors.SlowModeWaitError ? "SLOWMODE_WAIT" : error instanceof errors.FloodWaitError ? "FLOOD_WAIT" :
     rpcCode?.startsWith("RECAPTCHA_CHECK") ? "CAPTCHA_REQUIRED" : rpcCode && /^[A-Z][A-Z_0-9]{1,80}$/.test(rpcCode) ? rpcCode : "TELEGRAM_UNAVAILABLE";
-  const seconds = Number(e?.seconds);
+  const wait = /^(?:FLOOD(?:_PREMIUM)?_WAIT|SLOWMODE_WAIT)_(\d+)$/.exec(rpcCode ?? "");
+  const seconds = Number(e?.seconds ?? wait?.[1]);
   const failure = new Failure(code, Number.isFinite(seconds) ? Math.max(0, seconds) : 0);
   // Keep only safe diagnostics and the original call site; never retain the raw error/request as cause.
   failure.diagnostic = errorDiagnostic(error);

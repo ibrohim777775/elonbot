@@ -1,0 +1,96 @@
+{
+  "date": "2026-09-28",
+  "environment": "PGlite + fake Telegram; no production data or external sends",
+  "pricing": [
+    {
+      "code": "basic",
+      "group_limit": 30,
+      "price_sum": 20000,
+      "sort_order": 1
+    },
+    {
+      "code": "standard",
+      "group_limit": 100,
+      "price_sum": 50000,
+      "sort_order": 2
+    },
+    {
+      "code": "pro",
+      "group_limit": 300,
+      "price_sum": 75000,
+      "sort_order": 3
+    }
+  ],
+  "paidUpgrade": {
+    "basicPeriods": 3,
+    "proPeriods": 1,
+    "totalDays": 120,
+    "totalSum": 135000,
+    "immediateGroupLimit": 300,
+    "allProReferenceSum": 300000
+  },
+  "subsequentBasicActivation": {
+    "immediateGroupLimit": 30
+  },
+  "onboarding": {
+    "russianTelegramClient": true,
+    "startParameter": "ru_ad_test",
+    "initialLanguage": "uz",
+    "firstMessages": [
+      {
+        "method": "sendMessage",
+        "length": 275,
+        "text": "Salom! Men e'lonlaringizni tanlangan Telegram guruhlariga belgilangan vaqt oralig'ida avtomatik yuborishga yordam beraman.\n\nE'lon yarating, guruhlarni ulang, jadvalni belgilang va yuborishni boshqaring.\n\nBot hozir o'zbek tilida. O'zbekcha davom eting yoki rus tilini tanlang:"
+      }
+    ],
+    "afterLanguageSelection": [
+      {
+        "method": "editMessageText",
+        "length": 187,
+        "text": "Здравствуйте! Я помогу автоматически отправлять ваши объявления в выбранные Telegram-группы с заданным интервалом.\n\nСоздайте объявление, подключите группы и настройте расписание отправки."
+      },
+      {
+        "method": "sendMessage",
+        "length": 23,
+        "text": "Выберите нужный раздел."
+      },
+      {
+        "method": "sendMessage",
+        "length": 317,
+        "text": "Чтобы отправлять объявления от своего имени, сначала подключите Telegram-аккаунт.\n\nElonbot не сохраняет историю ваших переписок в других чатах и не отслеживает новые сообщения в них. Для работы сервиса сохраняются данные подключения, ваши объявления, настройки и обращения в поддержку. Подробнее — в разделе «Помощь»."
+      },
+      {
+        "method": "sendMessage",
+        "length": 920,
+        "text": "🎁 Первый месяц бесплатно — 30 дней с момента согласия!\n\nБот добавит подпись ниже в ваши публикации. Их общее количество по всем группам — 100. Одна публикация в одну группу, в том числе альбом с фото, считается за одну отправку. Ошибки и повторы одной доставки не увеличивают счётчик.\n\nПодпись:\nЭто сообщение отправлено с помощью этого бота:\nhttps://t.me/elonbot_test\n\nКогда счётчик достигнет 100, подпись исчезнет. Если за 30 дней счётчик не достигнет 100, подпись останется до 100, в том числе после перехода на платный тариф. Бесплатный срок при этом не продлевается. После бесплатного периода выберите платный тариф в разделе «Тариф». Автоматического списания нет.\n\nПредложение доступно один раз до первой оплаты: до начала пробного периода или в течение 30 дней после его начала. Эти 30 дней заменяют остаток обычного пробного срока, а не прибавляются к нему.\n\nГрупп в одном объявлении на бесплатном месяце: до 30."
+      }
+    ]
+  },
+  "attribution": {
+    "ctaCount": 9,
+    "distinctBotLinks": [
+      "{{BOT_URL}}"
+    ],
+    "ctxMatchUsed": false,
+    "campaignColumns": []
+  },
+  "economicAssumptions": {
+    "serverUsdPerMonth": 10,
+    "calculationUzsPerUsd": 12000,
+    "notAnExchangeQuote": true,
+    "serverOnlyCustomers": [
+      {
+        "plan": "basic",
+        "count": 6
+      },
+      {
+        "plan": "standard",
+        "count": 3
+      },
+      {
+        "plan": "pro",
+        "count": 2
+      }
+    ]
+  }
+}

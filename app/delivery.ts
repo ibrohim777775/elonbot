@@ -7,6 +7,7 @@ import { t, languageOf } from "./i18n";
 import { logError } from "./log";
 import { nextSendingTime, sendingDeadline } from "./schedule";
 import { planState } from "./billing";
+import { userGroupLimit } from "./tariffs";
 import { photosOf, photoMessageIds, photoCount } from "./media";
 import { renderText, messageLength } from "./content";
 import { DeliverySummary } from "./announcement-state";
@@ -36,7 +37,17 @@ export class Delivery {
         const user = await one(db, "SELECT trial_started_at,trial_ends_at,paid_until,language FROM users WHERE id=$1", [a.user_id]);
         const plan = planState(user);
         if (!plan.allowed) return;
-        a.subscriptionBefore = plan.until;
+        const groupLimit = await userGroupLimit(db, String(a.user_id));
+        const targets = await one(db, "SELECT count(*)::int n FROM announcement_groups WHERE announcement_id=$1", [a.id]);
+        if (targets.n > groupLimit) {
+          await db.query("UPDATE announcements SET status='paused',pause_reason='group_limit' WHERE id=$1", [a.id]);
+          await enqueueNotification(db, String(a.user_id), `group_limit:${a.id}:${groupLimit}:${a.updated_at.toISOString()}`, "group_limit", { groups: groupLimit, announcementId: String(a.id) });
+          return;
+        }
+        const paidUntil = user.paid_until ? new Date(user.paid_until).getTime() : 0;
+        // A paid quota can expire before a longer free period: stop the current
+        // batch at that boundary, then re-evaluate the recipient limit on retry.
+        a.subscriptionBefore = paidUntil > Date.now() ? Math.min(plan.until!, paidUntil) : plan.until;
         a.language = languageOf(user.language);
         const account = await one(db, "SELECT * FROM telegram_accounts WHERE user_id=$1", [a.user_id]);
         if (!account || (account.retry_after && account.retry_after > new Date())) return;
@@ -53,7 +64,7 @@ export class Delivery {
           await db.query(`INSERT INTO delivery_logs(announcement_id,group_id,scheduled_at,status,sender_telegram_id)
             SELECT $1,group_id,$2,'rate_limited',$3 FROM announcement_groups WHERE announcement_id=$1
             ORDER BY group_id LIMIT $4 ON CONFLICT(announcement_id,group_id,scheduled_at) DO NOTHING`,
-            [a.id, cycle, account.telegram_id, this.config.maxGroupsPerAnnouncement]);
+            [a.id, cycle, account.telegram_id, groupLimit]);
           await db.query("UPDATE announcements SET cycle_initialized=true WHERE id=$1", [a.id]);
         }
         const groups = (await db.query(`SELECT g.*,ug.access_hash,ug.retry_after,
@@ -85,7 +96,7 @@ export class Delivery {
           }
           const result = await this.sendOne(db, a, group, cycle, log, loadPhotos);
           if (result) { retry = result; break; }
-          if (a.sourceMissing || a.invalidContent) break;
+          if (a.sourceMissing || a.invalidContent || a.telegramRestricted) break;
           if (!await one(db, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [a.user_id])) break;
         }
         if (a.sourceMissing || a.invalidContent) await db.query(`UPDATE delivery_logs SET status='failed',error_code=$3
@@ -182,7 +193,11 @@ export class Delivery {
       await db.query(`UPDATE delivery_logs SET status=$2,error_code=$3::text,error_message=$3::text,telegram_message_ids=$4,
         telegram_message_id=$5,sent_at=CASE WHEN $6 THEN now() ELSE sent_at END WHERE id=$1`,
         [log.id, transient ? "rate_limited" : "failed", failure.code, JSON.stringify(ids), ids.at(-1) ?? null, ids.length > (log.telegram_message_ids?.length ?? 0)]);
-      if (failure.code === "PHOTO_SOURCE_MISSING") {
+      if (failure.code === "PEER_FLOOD") {
+        a.telegramRestricted = true;
+        await db.query("UPDATE announcements SET status='paused',pause_reason='telegram_restricted' WHERE user_id=$1 AND status='active'", [a.user_id]);
+        await enqueueNotification(db, String(a.user_id), `telegram_restricted:${log.id}`, "telegram_restricted", { announcementId: String(a.id) });
+      } else if (failure.code === "PHOTO_SOURCE_MISSING") {
         a.sourceMissing = true;
         await db.query("UPDATE announcements SET status='paused',pause_reason='photo_source_missing' WHERE id=$1", [a.id]);
         await this.bot.sendMessage(params.expectedId, t("delivery.photo_source_missing", {}, a.language), {

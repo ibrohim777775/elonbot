@@ -60,7 +60,13 @@ export class Notifications {
           : notice.kind === "tariff_expired" ? "tariff.notification_expired"
           : p.trial ? "tariff.notification_trial" : "tariff.notification_expiring";
         text = t(key, { until: displayTime(p.until, language), count: eligible.n }, language);
+        if (notice.kind === "tariff_activated" && p.groups) text += `\n${t("tariff.current_limit", { groups: p.groups }, language)}`;
         button = { text: t("menu.tariff", {}, language), callback_data: "settings:tariff" };
+      } else if (notice.kind === "group_limit" || notice.kind === "telegram_restricted") {
+        const ad = await one(this.database, "SELECT id,status,pause_reason FROM announcements WHERE id=$1 AND user_id=$2", [p.announcementId, user.id]);
+        if (!ad || ad.status !== "paused" || ad.pause_reason !== notice.kind) { await finish("skipped"); return; }
+        text = t(`delivery.${notice.kind}_notice`, { groups: p.groups ?? 0 }, language);
+        button = { text: t("delivery.open_announcement", {}, language), callback_data: `ann:show:${ad.id}` };
       } else {
         const ad = await one(this.database, "SELECT id,status FROM announcements WHERE id=$1 AND user_id=$2", [p.announcementId, user.id]);
         if (!ad || ad.status === "deleted") { await finish("skipped"); return; }

@@ -1,0 +1,12 @@
+{
+  "bodyBackground": "rgb(247, 248, 242)",
+  "ctaCount": 9,
+  "ctaTargets": [
+    "https://t.me/elonyuborishbot"
+  ],
+  "footerColor": "rgb(123, 133, 118)",
+  "footerSize": "10px",
+  "navDisplay": "none",
+  "scrollWidth": 375,
+  "width": 390
+}

@@ -9,11 +9,13 @@ import { logError } from "./log";
 import { MiniApp } from "./miniapp";
 import { Admin } from "./admin";
 import { helpPage } from "./help";
+import { robotsTxt, siteMap, sitePage, siteRobots } from "./site";
 import { clientAddressResolver, RequestLimits } from "./http-security";
 
 const headers = {
   "Cache-Control": "no-store", "Referrer-Policy": "no-referrer", "X-Content-Type-Options": "nosniff",
   "X-Frame-Options": "DENY",
+  "X-Robots-Tag": "noindex, nofollow",
   "Content-Security-Policy": "default-src 'self'; script-src 'self'; style-src 'self'; frame-ancestors 'none'; form-action 'self'; base-uri 'none'",
 };
 const appHeaders = { ...headers,
@@ -53,8 +55,12 @@ export function createHttpServer(config: Config, database: Database, accounts: A
     "/account": ["public/account.html", "text/html; charset=utf-8"],
     "/account-assets/account.js": ["public/account.js", "text/javascript; charset=utf-8"],
     "/account-assets/account.css": ["public/account.css", "text/css; charset=utf-8"],
-    "/": ["public/app.html", "text/html; charset=utf-8"],
     "/app": ["public/app.html", "text/html; charset=utf-8"],
+    "/site-assets/site.css": ["public/site/site.css", "text/css; charset=utf-8"],
+    "/site-assets/site.js": ["public/site/site.js", "text/javascript; charset=utf-8"],
+    "/site-assets/favicon.svg": ["public/site/favicon.svg", "image/svg+xml"],
+    "/site-assets/share-uz.png": ["public/site/share-uz.png", "image/png"],
+    "/site-assets/share-ru.png": ["public/site/share-ru.png", "image/png"],
     "/app-assets/app.js": ["public/app.js", "text/javascript; charset=utf-8"],
     "/app-assets/app.css": ["public/app.css", "text/css; charset=utf-8"],
     "/app-assets/help.css": ["public/help.css", "text/css; charset=utf-8"],
@@ -78,14 +84,28 @@ export function createHttpServer(config: Config, database: Database, accounts: A
         console.log(`[http] ${request.method} ${label} ${response.statusCode} ${Date.now() - started}ms`);
       });
       if (request.method === "GET" && path === "/health") { json(response, ready() ? 200 : 503, { status: ready() ? "ok" : "starting" }); return; }
+      if (["GET", "HEAD"].includes(request.method ?? "") && ["/", "/uz/", "/ru/"].includes(path)) {
+        response.writeHead(301, { ...headers, "X-Robots-Tag": siteRobots(config), Location: path === "/" ? "/uz" : path.slice(0, -1) }); response.end(); return;
+      }
+      if (["GET", "HEAD"].includes(request.method ?? "") && ["/uz", "/ru"].includes(path)) {
+        const page = await sitePage(path === "/ru" ? "ru" : "uz", config, database, ready());
+        response.writeHead(200, { ...headers, "X-Robots-Tag": siteRobots(config), "Content-Type": "text/html; charset=utf-8", "Content-Language": path.slice(1), "Content-Security-Policy": page.csp });
+        response.end(request.method === "HEAD" ? undefined : page.html); return;
+      }
+      if (["GET", "HEAD"].includes(request.method ?? "") && ["/robots.txt", "/sitemap.xml"].includes(path)) {
+        response.writeHead(200, { ...headers, "Content-Type": path === "/robots.txt" ? "text/plain; charset=utf-8" : "application/xml; charset=utf-8" });
+        response.end(request.method === "HEAD" ? undefined : path === "/robots.txt" ? robotsTxt(config) : siteMap(config)); return;
+      }
       if (request.method === "GET" && path === "/help") {
         const content = await helpPage(url.searchParams.get("lang"));
         response.writeHead(200, { ...appHeaders, "Content-Type": "text/html; charset=utf-8" }); response.end(content); return;
       }
-      if (request.method === "GET" && assets[path]) {
+      if (["GET", "HEAD"].includes(request.method ?? "") && assets[path]) {
         const [file, mime] = assets[path];
         const content = await readFile(file);
-        response.writeHead(200, { ...(path.startsWith("/account") ? headers : appHeaders), "Content-Type": mime }); response.end(content); return;
+        response.writeHead(200, { ...(path.startsWith("/account") || path.startsWith("/site-assets/") ? headers : appHeaders),
+          ...(path.startsWith("/site-assets/") ? { "X-Robots-Tag": siteRobots(config), "Cache-Control": "no-cache" } : {}),
+          "Content-Type": mime, "Content-Length": content.length }); response.end(request.method === "HEAD" ? undefined : content); return;
       }
       if (path.startsWith("/api/") || path.startsWith("/admin-api/")) {
         const service = path.startsWith("/admin-api/") ? admin : mini;

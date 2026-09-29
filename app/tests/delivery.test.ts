@@ -35,29 +35,18 @@ test("more than 500 daily deliveries remain allowed while the per-chat minute li
   } finally { await pg.close(); }
 });
 
-test("delivery never exceeds 30 targets across retries, even for a legacy oversized announcement", async () => {
+test("oversized legacy announcements pause without silently truncating recipients", async () => {
   const { pg, database } = await testDatabase();
   try {
     await seed(database); const ids = await addGroups(database, 33);
     const id = await announcement(database, "1", ids);
-    const sent: string[] = [];
-    const accounts = new Accounts(config, { async execute(_method, params) {
-      sent.push(params.chatId); return { messageIds: [sent.length] };
-    } });
-    const delivery = new Delivery(database, config, accounts, {} as any);
-    await delivery.run();
-    assert.equal(sent.length, 20); // The independent per-minute rate limit still applies.
-    assert.ok((await one(database, "SELECT delivery_cycle_at FROM announcements WHERE id=$1", [id])).delivery_cycle_at);
-    // Lost access in the first page must not replace that recipient with a 31st group after a retry.
-    await database.query("UPDATE user_groups SET can_post=false WHERE user_id=1 AND group_id=1");
-    await database.query("UPDATE delivery_logs SET sent_at=now()-interval '2 minutes' WHERE announcement_id=$1", [id]);
-    await database.query("UPDATE announcements SET next_run_at=now()-interval '1 second' WHERE id=$1", [id]);
+    const accounts = new Accounts(config, { async execute() { throw new Error("Must not send an oversized announcement"); } });
     await new Delivery(database, config, accounts, {} as any).run();
-    assert.equal(sent.length, 30); assert.equal(new Set(sent).size, 30);
-    const delivered = (await database.query("SELECT group_id FROM delivery_logs WHERE announcement_id=$1 AND status='sent' ORDER BY group_id", [id])).rows.map(g => String(g.group_id));
-    assert.deepEqual(delivered, ids.slice(0, 30));
-    assert.equal((await one(database, "SELECT delivery_cycle_at FROM announcements WHERE id=$1", [id])).delivery_cycle_at, null);
-    assert.equal((await one(database, "SELECT count(*)::int n FROM user_groups WHERE user_id=1")).n, 35);
+    const ad = await one(database, "SELECT status,pause_reason FROM announcements WHERE id=$1", [id]);
+    assert.deepEqual(ad, { status: "paused", pause_reason: "group_limit" });
+    assert.equal((await one(database, "SELECT count(*)::int n FROM announcement_groups WHERE announcement_id=$1", [id])).n, 35);
+    assert.equal((await one(database, "SELECT count(*)::int n FROM delivery_logs")).n, 0);
+    assert.equal((await one(database, "SELECT kind FROM user_notifications")).kind, "group_limit");
   } finally { await pg.close(); }
 });
 

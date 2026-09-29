@@ -1,0 +1,15 @@
+{
+  "file": "elonbot-qollanma-uz.mp4",
+  "width": 720,
+  "height": 1280,
+  "fps": 24,
+  "seconds": 121,
+  "frames": 2904,
+  "audio": false,
+  "language": "uz",
+  "bytes": 1548427,
+  "scene_count": 17,
+  "layout_overflow": false,
+  "decode_check": "passed: all 2904 frames, exit 0",
+  "browser_playback": "passed: duration 121s, readyState 4, no media error, seekable 0-121s, seek to 45s verified"
+}

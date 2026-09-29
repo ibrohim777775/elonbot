@@ -27,7 +27,7 @@ test("Mini App authenticates signed owner, rejects tampering, replay age and dup
 test("group-only HTTP API binds permissions to owner and keeps bot data intact", async () => {
   const { pg, database } = await testDatabase();
   let calls = 0;
-  const localConfig = { ...config, maxGroupsPerAnnouncement: 3 };
+  const localConfig = config;
   const accounts = new Accounts(localConfig, { async execute(method, params) {
     assert.equal(method, "groups"); calls++;
     const ids = params.userId === "1" ? [123, 456, 789, 888, 999] : [123, 444];
@@ -37,6 +37,8 @@ test("group-only HTTP API binds permissions to owner and keeps bot data intact",
   const server = createHttpServer(localConfig, database, accounts, async () => {}, () => true, new MiniApp(localConfig, database, new Groups(accounts)));
   try {
     await seed(database); await announcement(database);
+    await database.query("UPDATE tariff_plans SET group_limit=3 WHERE code='basic'");
+    await database.query("UPDATE users SET paid_group_limit=3 WHERE id=1");
     await database.query("INSERT INTO templates(user_id,text) VALUES(1,'Keep template')");
     await database.query("INSERT INTO user_states(user_id,data) VALUES(1,'{\"step\":\"content\",\"text\":\"Keep draft\"}')");
     server.listen(0, "127.0.0.1"); await once(server, "listening");

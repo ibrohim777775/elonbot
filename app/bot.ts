@@ -7,6 +7,7 @@ import { Groups } from "./groups";
 import { t, languageOf, languages, translations, withLanguage, changeLanguage, currentLanguage } from "./i18n";
 import { Failure } from "./telegram";
 import { logError } from "./log";
+import { tariffCatalog, userGroupLimit } from "./tariffs";
 import { planState, requireCreationAccess } from "./billing";
 import { acceptPromotion, enrollment, pendingPromotionFooter, promotionOffer } from "./promotion";
 import { Support } from "./support";
@@ -61,6 +62,8 @@ async function owned(ctx: Ctx, table: "templates" | "announcements", id: string)
 
 export function createBot(config: Config, database: Database, accounts: Accounts, groups: Groups, delivery: Delivery, supportService?: Support) {
   const helpUrl = () => `${config.baseUrl}/help?lang=${currentLanguage()}`;
+  const withChannel = (keyboard: InlineKeyboard) => config.publicChannelUrl
+    ? keyboard.row().url(t("menu.channel"), config.publicChannelUrl) : keyboard;
   const mainKeyboard = () => new Keyboard().text(t("menu.announcements")).text(t("menu.templates")).row()
     .text(t("menu.groups")).text(t("menu.settings")).row().text(t("menu.support"))
     .webApp(t("menu.help"), helpUrl()).resized().persistent();
@@ -114,7 +117,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
           error.seconds ? "common.rate_limited" :
           error.code === "CHAT_WRITE_FORBIDDEN" ? "groups.user_cannot_post" : error.code === "GROUP_REQUIRED" ? "validation.group_required" :
           error.code === "NOT_FOUND" ? "common.not_found" : "common.error";
-        await ctx.reply(t(key, { seconds: Math.ceil(error.seconds), limit: config.maxGroupsPerAnnouncement }), { reply_markup:
+        await ctx.reply(t(key, { seconds: Math.ceil(error.seconds), limit: (await userGroupLimit(ctx.db, ctx.userId)) }), { reply_markup:
           error.code === "TEMPLATE_GROUPS_UNAVAILABLE" && ctx.wizard.templateId ? templateActions(ctx.wizard.templateId) : undefined });
         }
       }
@@ -126,10 +129,10 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     if (ctx.notifySupport) void support.notify(ctx.userId).catch(error => logError("support_notify_failed", error));
   });
   async function settingsMenu(ctx: Ctx) {
-    await show(ctx, t("settings.prompt"), new InlineKeyboard()
+    await show(ctx, t("settings.prompt"), withChannel(new InlineKeyboard()
       .text(t("menu.account"), "settings:account").row()
       .text(t("menu.tariff"), "settings:tariff").row()
-      .text(t("menu.language"), "settings:language").row()
+      .text(t("menu.language"), "settings:language")).row()
       .text(t("common.back"), "menu:main"));
   }
   async function languageMenu(ctx: Ctx) {
@@ -143,7 +146,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       .text("🇷🇺 Русский", "welcome_language:ru"));
   }
   async function helpMenu(ctx: Ctx) {
-    await ctx.reply(t("help.prompt"), { reply_markup: new InlineKeyboard().webApp(t("menu.help"), helpUrl())
+    await ctx.reply(t("help.prompt"), { reply_markup: withChannel(new InlineKeyboard().webApp(t("menu.help"), helpUrl()))
       .row().text(t("common.back"), "menu:main") });
   }
   async function tariffMenu(ctx: Ctx) {
@@ -155,14 +158,17 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     const keyboard = new InlineKeyboard();
     if (offer) keyboard.text(t("promotion.accept"), `promo:accept:${offer.revision}:${offer.language}`).row();
     keyboard.text(t("menu.support"), "support:open").row().text(t("common.back"), "settings:open");
-    const details = joined ? `\n\n${t("promotion.progress", { count: joined.sent_count })}\n\n${joined.footer}`
-      : offer ? `\n\n${t("promotion.offer", { footer: offer.footer })}` : "";
-    await show(ctx, `${t(`tariff.${plan.status}`, { until })}\n\n${t(joined ? "promotion.conditions" : "tariff.conditions")}${details}`, keyboard);
+    const catalog = await tariffCatalog(ctx.db);
+    const options = catalog.plans.map(p => t("tariff.plan_option", { name: t(`tariff.names.${p.code}`), groups: p.group_limit, price: p.price_sum.toLocaleString(currentLanguage() === "ru" ? "ru-RU" : "uz-UZ") })).join("\n");
+    const limits = t("tariff.current_limit", { groups: await userGroupLimit(ctx.db, ctx.userId) });
+    const details = joined ? `\n\n${t("promotion.progress", { count: joined.sent_count, limit: joined.message_limit })}\n\n${joined.footer}`
+      : offer ? `\n\n${t("promotion.offer", { footer: offer.footer, limit: offer.limit, groups: offer.groups })}` : "";
+    await show(ctx, `${t(`tariff.${plan.status}`, { until })}\n\n${limits}\n\n${options}\n\n${t(joined ? "promotion.conditions" : "tariff.conditions")}${details}`, keyboard);
   }
   async function offerPromotion(ctx: Ctx) {
     const offer = await promotionOffer(ctx.db, ctx.userId, currentLanguage(), bot.botInfo.username);
     if (!offer) return;
-    await ctx.reply(t("promotion.offer", { footer: offer.footer }), { reply_markup: new InlineKeyboard()
+    await ctx.reply(t("promotion.offer", { footer: offer.footer, limit: offer.limit, groups: offer.groups }), { reply_markup: new InlineKeyboard()
       .text(t("promotion.accept"), `promo:accept:${offer.revision}:${offer.language}`).row()
       .text(t("promotion.decline"), "promo:decline") });
   }
@@ -212,7 +218,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     for (const row of rows.slice(page * groupsPerPage, (page + 1) * groupsPerPage)) keyboard.text(`${ctx.wizard.groups.includes(String(row.id)) ? "✅ " : ""}${row.title.slice(0, 40)}`, `ann:group:${row.id}`).row();
     groupNavigation(keyboard, page, rows.length, "ann:groups_page");
     keyboard.text(t("common.done"), "ann:groups_done");
-    await show(ctx, t("announcements.select_groups", { count: ctx.wizard.groups.length, limit: config.maxGroupsPerAnnouncement }), wizardBack(ctx, keyboard));
+    await show(ctx, t("announcements.select_groups", { count: ctx.wizard.groups.length, limit: (await userGroupLimit(ctx.db, ctx.userId)) }), wizardBack(ctx, keyboard));
   };
   const askInterval = async (ctx: Ctx) => {
     ctx.wizard.step = ctx.wizard.editId ? "edit_interval" : "interval";
@@ -304,9 +310,10 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     const legacyPreview = !!w.photos?.length;
     await draftSources(ctx);
     if (!legacyPreview) await previewPhoto(ctx, w.photoMessageIds ?? []);
-    const footer = w.kind === "announcement" ? await pendingPromotionFooter(ctx.db, ctx.userId) : "";
+    const joined = w.kind === "announcement" ? await enrollment(ctx.db, ctx.userId) : null;
+    const footer = joined && joined.sent_count < joined.message_limit ? joined.footer : "";
     await show(ctx, `${t(w.kind === "template" ? "templates.preview" : "announcements.preview", {
-      text: contentDescription(w) + (footer ? `\n\n${footer}\n\n${t("promotion.preview")}` : ""), interval: w.interval!, groups: w.groups!.length, window: windowDescription(w),
+      text: contentDescription(w) + (footer ? `\n\n${footer}\n\n${t("promotion.preview", { limit: joined.message_limit })}` : ""), interval: w.interval!, groups: w.groups!.length, window: windowDescription(w),
     })}\n\n${await draftDescription(ctx, w)}${draftPhotoCount(w) ? `\n\n${t("announcements.keep_photos")}` : ""}`, wizardBack(ctx, new InlineKeyboard()
       .text(t(w.kind === "template" ? "common.save" : "announcements.start"), w.kind === "template" ? "templates:save" : "ann:confirm")
       .text(t("common.cancel"), "ann:cancel")));
@@ -334,8 +341,8 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       await ctx.reply(t("templates.needs_settings")); await askGroups(ctx); return;
     }
     if (draft.groups!.some(g => !available.has(g))) { await show(ctx, t("templates.groups_unavailable"), templateActions(id)); return; }
-    if (draft.groups!.length > config.maxGroupsPerAnnouncement) {
-      await ctx.reply(t("validation.announcement_group_limit", { limit: config.maxGroupsPerAnnouncement }));
+    if (draft.groups!.length > (await userGroupLimit(ctx.db, ctx.userId))) {
+      await ctx.reply(t("validation.announcement_group_limit", { limit: (await userGroupLimit(ctx.db, ctx.userId)) }));
       await askGroups(ctx); return;
     }
     await showConfirmation(ctx);
@@ -358,7 +365,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       FROM announcement_groups ag LEFT JOIN user_groups ug ON ug.group_id=ag.group_id AND ug.user_id=$2
       WHERE ag.announcement_id=$1`, [record.id, ctx.userId]);
     if (!targets.available) throw new Failure("GROUP_REQUIRED");
-    if (targets.total > config.maxGroupsPerAnnouncement) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
+    if (targets.total > (await userGroupLimit(ctx.db, ctx.userId))) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
     const count = await one(ctx.db, "SELECT count(*)::int n FROM announcements WHERE user_id=$1 AND status='active'", [ctx.userId]);
     if (count.n >= config.maxAnnouncements) throw new Failure("ANNOUNCEMENT_LIMIT");
     await requireCreationAccess(ctx.db, ctx.userId, true);
@@ -469,7 +476,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
 
   async function showStart(ctx: Ctx) {
     ctx.wizard = {};
-    await show(ctx, t("start.welcome"), new InlineKeyboard().webApp(t("menu.help"), helpUrl()));
+    await show(ctx, t("start.welcome"), withChannel(new InlineKeyboard().webApp(t("menu.help"), helpUrl())));
     await ctx.reply(t("start.choose_section"), { reply_markup: mainKeyboard() });
     await ctx.api.setMyCommands(botCommands(currentLanguage(), config.adminIds.includes(String(ctx.from!.id))), { scope: { type: "chat", chat_id: ctx.from!.id } }).catch(error => logError("bot_commands_failed", error));
     if (!await one(ctx.db, "SELECT 1 FROM telegram_accounts WHERE user_id=$1", [ctx.userId])) {
@@ -543,7 +550,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
       const joined = await acceptPromotion(ctx.db, ctx.userId, currentLanguage(), bot.botInfo.username!, Number(version));
       const until = new Intl.DateTimeFormat(currentLanguage() === "ru" ? "ru-RU" : "uz-UZ", {
         timeZone: "Asia/Tashkent", dateStyle: "short", timeStyle: "short" }).format(new Date(joined.ends_at));
-      await show(ctx, t("promotion.activated", { until, count: joined.sent_count }), button("menu.tariff", "settings:tariff")
+      await show(ctx, t("promotion.activated", { until, count: joined.sent_count, limit: joined.message_limit, groups: joined.group_limit }), button("menu.tariff", "settings:tariff")
         .row().text(t("common.back"), "menu:main"));
       ctx.sendNow = true; return;
     }
@@ -719,7 +726,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
     }
     if (p[0] === "ann" && p[1] === "group" && ["groups", "edit_groups"].includes(w.step ?? "")) {
       if (!(await groups.list(ctx.db, ctx.userId)).some(g => String(g.id) === id && g.can_post)) throw new Failure("NOT_FOUND");
-      if (!w.groups?.includes(id) && (w.groups?.length ?? 0) >= config.maxGroupsPerAnnouncement) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
+      if (!w.groups?.includes(id) && (w.groups?.length ?? 0) >= (await userGroupLimit(ctx.db, ctx.userId))) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
       w.groups = w.groups?.includes(id) ? w.groups.filter(g => g !== id) : [...w.groups ?? [], id]; await askGroups(ctx); return;
     }
     if (data === "ann:groups_done" && ["groups", "edit_groups"].includes(w.step ?? "")) {
@@ -813,7 +820,7 @@ export function createBot(config: Config, database: Database, accounts: Accounts
 
   async function validateGroups(ctx: Ctx) {
     const selected = ctx.wizard.groups;
-    if ((selected?.length ?? 0) > config.maxGroupsPerAnnouncement) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
+    if ((selected?.length ?? 0) > (await userGroupLimit(ctx.db, ctx.userId))) throw new Failure("ANNOUNCEMENT_GROUP_LIMIT");
     const available = new Set((await groups.list(ctx.db, ctx.userId)).filter(g => g.can_post).map(g => String(g.id)));
     if (!selected?.length || selected.some(g => !available.has(g))) throw new Failure(ctx.wizard.fromTemplate ? "TEMPLATE_GROUPS_UNAVAILABLE" : "GROUP_REQUIRED");
   }

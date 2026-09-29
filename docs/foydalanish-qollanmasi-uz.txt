@@ -61,7 +61,7 @@ E'lon matnini yuboring. Rasmli e'lon uchun boshqa chatdagi tayyor xabar yoki alb
 
 Yo'naltirilgan xabarlarni bot chatidan o'chirmang: yuborish uchun rasmlar shu yerdan olinadi. Bazada faqat shu xabarlarning raqamlari saqlanadi, rasmlarning o'zi Telegramda qoladi. Asl xabarlar mavjud bo'lmasa, yuborish to'xtatiladi va bot rasmlarni qayta yo'naltirishni so'raydi. Eski e'lon va shablonlar ishlashda davom etadi. Eski shablondan foydalanganda bot yuborgan ko'rib chiqish albomini ham chatda qoldiring.
 
-Keyin bitta e'lon uchun ko'pi bilan 30 ta guruh tanlang. Tanlangan guruh yonida ✅, ro'yxat tepasida esa tanlangan guruhlar soni chiqadi. «Tayyor» ni bosing.
+Keyin bitta e'lon uchun tarifingiz doirasida guruhlarni tanlang. Joriy limit ro'yxat tepasida va «Tarif» bo'limida ko'rsatiladi. Tanlangan guruh yonida ✅, ro'yxat tepasida esa tanlangan guruhlar soni chiqadi. «Tayyor» ni bosing.
 
 Kunlik yuborish soniga cheklov yo'q. Yuborish tanlangan jadval, tezlik cheklovlari va Telegramning vaqtinchalik cheklovlariga amal qiladi.
 
@@ -110,11 +110,11 @@ E’lonni o‘chirish uchun «O'chirish»ni bosib tasdiqlang. Bot guruhlarga old
 
 Narxi qancha?
 
-Oddiy variant — birinchi e'lon ishga tushirilgandan boshlab bot yozuvisiz 7 kun bepul. Keyin 30 kun uchun 20 000 so'm. To'lov va tarifni yoqish uchun «✉️ Admin bilan bog'lanish» orqali yozing. Tarifni admin yoqadi. Muddatni «⚙️ Sozlamalar» → «💳 Tarif» bo'limida ko'rishingiz mumkin.
+Oddiy variant — birinchi e'lon ishga tushirilgandan boshlab bot yozuvisiz 7 kun bepul. Keyin 30 kunlik pullik tarifni tanlang. Joriy narxlar va limitlar «Tarif» bo'limida ko'rsatiladi. Bepul muddatlar boshlanish vaqtidagi asosiy tarif guruh limitini oladi. To'lov va tarifni yoqish uchun «✉️ Admin bilan bog'lanish» orqali yozing. Tarifni admin yoqadi. Boshlang'ich variantlar: 30 tagacha guruh — 20 000 so'm, 100 tagacha — 50 000, 300 tagacha — 75 000; admin takliflarni o'zgartirishi mumkin. To'langan davr limiti keyingi faollashtirishgacha saqlanadi. Yuborish Telegram cheklovlarini hisobga olib ketma-ket bajariladi. Muddatni «⚙️ Sozlamalar» → «💳 Tarif» bo'limida ko'rishingiz mumkin.
 
-«Tarif» bo'limida «Birinchi oy bepul» taklifi mavjud bo'lsa, rozilik bergan vaqtingizdan 30 kun bepul foydalanishingiz mumkin. Buning evaziga dastlabki 100 ta muvaffaqiyatli yuborilgan e'lon oxiriga sizga ko'rsatilgan matn va bot havolasi qo'shiladi. Rozilik berishdan oldin yozuv va shartlarni o'qing. Taklifdan birinchi to'lovgacha bir marta foydalanish mumkin: oddiy sinov muddati boshlanishidan oldin yoki u boshlanganidan keyin 30 kun ichida. Bu 30 kun qolgan sinov muddatini almashtiradi, unga qo'shilmaydi. Rad etilsa, oddiy shartlar saqlanadi.
+«Tarif» bo'limida «Birinchi oy bepul» taklifi mavjud bo'lsa, rozilik bergan vaqtingizdan 30 kun bepul foydalanishingiz mumkin. Buning evaziga dastlabki muvaffaqiyatli yuborilgan e'lonlar oxiriga sizga ko'rsatilgan matn va bot havolasi qo'shiladi. Aniq son rozilikdan oldin taklifda ko'rsatiladi; keyin aksiya o'zgarsa ham siz uchun kelishilgan son saqlanadi. Rozilik berishdan oldin yozuv va shartlarni o'qing. Taklifdan birinchi to'lovgacha bir marta foydalanish mumkin: oddiy sinov muddati boshlanishidan oldin yoki u boshlanganidan keyin 30 kun ichida. Bu 30 kun qolgan sinov muddatini almashtiradi, unga qo'shilmaydi. Rad etilsa, oddiy shartlar saqlanadi.
 
-Hisoblagich barcha e'lonlar uchun umumiy: bir guruhga yuborilgan e'lon, jumladan rasmlar albomi, bitta yuborish hisoblanadi. Xatolar va bir yuborishning takroriy urinishlari hisoblanmaydi. 100 ta muvaffaqiyatli yuborishdan so'ng yozuv qo'shilmaydi, bepul foydalanish esa 30 kun oxirigacha qoladi. Oy oldin tugasa, yozuv 100 tagacha, jumladan pullik tarifda ham qo'shiladi. Bepul muddat uzaymaydi, avtomatik pul yechilmaydi. Natijani «Tarif» bo'limida ko'rasiz; e'lonni o'chirish yoki botni qayta ishga tushirish hisoblagichni nolga tushirmaydi.
+Hisoblagich barcha e'lonlar uchun umumiy: bir guruhga yuborilgan e'lon, jumladan rasmlar albomi, bitta yuborish hisoblanadi. Xatolar va bir yuborishning takroriy urinishlari hisoblanmaydi. Kelishilgan miqdorda muvaffaqiyatli yuborishdan so'ng yozuv qo'shilmaydi, bepul foydalanish esa 30 kun oxirigacha qoladi. Oy oldin tugasa, yozuv kelishilgan songacha, jumladan pullik tarifda ham qo'shiladi. Bepul muddat uzaymaydi, avtomatik pul yechilmaydi. Natijani «Tarif» bo'limida ko'rasiz; e'lonni o'chirish yoki botni qayta ishga tushirish hisoblagichni nolga tushirmaydi.
 
 Muddat tugashiga bir sutkadan kam qolganda bot eslatadi. Muddat tugagani va tarif faollashtirilgani haqida ham xabar beradi. To‘lovdan keyin yoqilgan e’lonlar jadval bo‘yicha davom etadi. O‘zingiz to‘xtatgan e’lonlar pauzada qoladi.
 

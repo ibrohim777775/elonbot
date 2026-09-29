@@ -1,0 +1,14 @@
+🤖 Elonbotda e'lonni qanday tayyorlash va ishga tushirish mumkin?
+
+Ushbu 2 daqiqalik videoda bosqichma-bosqich ko'rsatamiz:
+• guruhlarni ulash;
+• matn va rasmlarni qo'shish;
+• yuborish vaqtini belgilash;
+• natijani ko'rish va yuborishni to'xtatish.
+
+Videoda akkaunt oldindan ulangan. Barcha guruhlar va e'lonlar — o'quv misoli.
+
+📌 Rasmli xabarlarni bot chatidan o'chirmang. Vaqtlar Toshkent bo'yicha ko'rsatilgan.
+
+Bot: https://t.me/elonyuborishbot
+Savollar bo'lsa, botdagi «Qo'llanma» bo'limini oching yoki /help yuboring.

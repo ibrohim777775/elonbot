@@ -1,0 +1,155 @@
+[
+  {
+    "scene": 1,
+    "kind": "intro",
+    "start": 0,
+    "duration": 6,
+    "title": "Bir marta tayyorlang.",
+    "caption": "E'loningizni tayyorlang. Guruhlar va vaqtni tanlang. Qolganini bot bajaradi.",
+    "states": 1
+  },
+  {
+    "scene": 2,
+    "kind": "language",
+    "start": 6,
+    "duration": 7,
+    "title": "Botni oching",
+    "caption": "@elonyuborishbot ni oching. Start tugmasini, so'ng «O'zbekcha davom etish»ni bosing.",
+    "states": 1
+  },
+  {
+    "scene": 3,
+    "kind": "ready",
+    "start": 13,
+    "duration": 5,
+    "title": "Boshlashdan oldin",
+    "caption": "Bu videoda Telegram akkaunti oldindan ulangan. Keyingi qadam — guruhlarni tanlash.",
+    "states": 1
+  },
+  {
+    "scene": 4,
+    "kind": "groups_menu",
+    "start": 18,
+    "duration": 6,
+    "title": "Guruhlarni qo'shing",
+    "caption": "«Guruhlar» bo'limini oching va «Guruh qo'shish» tugmasini bosing.",
+    "states": 2
+  },
+  {
+    "scene": 5,
+    "kind": "groups_app",
+    "start": 24,
+    "duration": 9,
+    "title": "Guruhni ulang",
+    "caption": "Qidiruvda guruhni toping. «Ulash»ni bosing. Guruhda e'lon berishga ruxsat bo'lishi kerak. So'ng botga qayting.",
+    "states": 3
+  },
+  {
+    "scene": 6,
+    "kind": "create",
+    "start": 33,
+    "duration": 5,
+    "title": "Yangi e'lon yarating",
+    "caption": "Botga qayting. «E'lonlarim» → «E'lon yaratish»ni tanlang.",
+    "states": 1
+  },
+  {
+    "scene": 7,
+    "kind": "text",
+    "start": 38,
+    "duration": 7,
+    "title": "E'lon matni",
+    "caption": "E'lon matni va kontaktingizni yozing. Rasmsiz variantda «Davom etish»ni bosing.",
+    "states": 2
+  },
+  {
+    "scene": 8,
+    "kind": "photos",
+    "start": 45,
+    "duration": 10,
+    "title": "Tayyor albomni yo'naltiring",
+    "caption": "Tayyor albom → yo'naltirish → Elonbot. 10 tagacha rasm. Yuklanishini kutib, «Tayyor»ni bosing. Xabarlarni chatda qoldiring.",
+    "states": 3
+  },
+  {
+    "scene": 9,
+    "kind": "select",
+    "start": 55,
+    "duration": 7,
+    "title": "E'lon uchun guruhlar",
+    "caption": "Guruhlarni belgilang va «Tayyor»ni bosing. 30 — misoldagi limit; joriy limit tarifingizda ko'rsatiladi.",
+    "states": 3
+  },
+  {
+    "scene": 10,
+    "kind": "interval",
+    "start": 62,
+    "duration": 6,
+    "title": "Takrorlash oralig'i",
+    "caption": "Yuborish oralig'ini tanlang. Misolda — 20 daqiqa. Guruh qoidalariga mos oraliqni belgilang.",
+    "states": 1
+  },
+  {
+    "scene": 11,
+    "kind": "hours",
+    "start": 68,
+    "duration": 9,
+    "title": "Yuborish soatlari",
+    "caption": "Boshlanish va tugash vaqtini tanlang. Misolda: har kuni 07:00–22:00. Barcha vaqtlar Toshkent bo'yicha.",
+    "states": 2
+  },
+  {
+    "scene": 12,
+    "kind": "first",
+    "start": 77,
+    "duration": 8,
+    "title": "Birinchi yuborish",
+    "caption": "«Hozir yuborish» ham tanlangan soatlarga amal qiladi. «Jadval bo'yicha boshlash» — tanlangan oraliqdan keyin.",
+    "states": 1
+  },
+  {
+    "scene": 13,
+    "kind": "template",
+    "start": 85,
+    "duration": 6,
+    "title": "Shablon qilib saqlang",
+    "caption": "Keyin yana ishlatish uchun «Ha»ni bosing. Matn, rasmlar, guruhlar va jadval shablonda saqlanadi.",
+    "states": 1
+  },
+  {
+    "scene": 14,
+    "kind": "confirm",
+    "start": 91,
+    "duration": 8,
+    "title": "Tekshiring va boshlang",
+    "caption": "Matn, guruhlar va vaqtni tekshiring. Hammasi to'g'ri bo'lsa, «Ishga tushirish»ni bosing.",
+    "states": 1
+  },
+  {
+    "scene": 15,
+    "kind": "result",
+    "start": 99,
+    "duration": 7,
+    "title": "Yuborish natijasi",
+    "caption": "Natijani e'lon kartasida ko'ring. Bu yerda natijalar o'quv misoli. Telegram cheklovlari sabab yuborish kechikishi mumkin.",
+    "states": 2
+  },
+  {
+    "scene": 16,
+    "kind": "pause",
+    "start": 106,
+    "duration": 8,
+    "title": "Yuborishni boshqaring",
+    "caption": "Vaqtincha to'xtatish uchun «To'xtatib turish»ni bosing. «Davom ettirish» bilan yana ishga tushiring.",
+    "states": 3
+  },
+  {
+    "scene": 17,
+    "kind": "end",
+    "start": 114,
+    "duration": 7,
+    "title": "Tayyor. Vaqtingiz o'zingizga.",
+    "caption": "Yordam uchun «Qo'llanma» yoki /help ni oching. Oldingi bosqichga botdagi «Orqaga» tugmasi bilan qayting.",
+    "states": 1
+  }
+]

@@ -1,6 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { Accounts } from "../accounts";
 import { Admin } from "../admin";
 import { createBot } from "../bot";
@@ -34,6 +35,74 @@ async function client(database: Database) {
   } } as any);
   return { callback, messages, bot };
 }
+
+test("new promotion quotas are displayed, accepted once and enforced without changing earlier agreements", async () => {
+  const { pg, database } = await testDatabase();
+  try {
+    await prepare(database);
+    const original = await join(database, "2");
+    const settings = await savePromotionSettings(database, "101", { ...await promotionSettings(database), message_limit: 2 });
+    const ui = await client(database);
+    await ui.callback("promo:accept:1:uz");
+    assert.equal(await enrollment(database, "1"), undefined, "The old offer must be displayed again before accepting new terms");
+    assert.equal(ui.messages.at(-1).reply_markup.inline_keyboard[0][0].callback_data, "promo:accept:2:uz");
+    assert.match(ui.messages.at(-1).text, /dastlabki 2 ta e'lon/);
+    assert.doesNotMatch(ui.messages.at(-1).text, /dastlabki 100 ta e'lon/);
+    await ui.callback("promo:accept:2:uz");
+    const consent = await enrollment(database, "1");
+    assert.equal(consent.message_limit, 2);
+    assert.ok(!ui.messages.at(-1).text.includes("{limit}"));
+    assert.deepEqual(await enrollment(database, "2"), original);
+    await savePromotionSettings(database, "101", { ...settings, message_limit: 250 });
+    const ids = await addGroups(database, 1);
+    await announcement(database, "1", ids);
+    const calls: any[] = [], accounts = new Accounts(config, { async execute(method, params) {
+      assert.equal(method, "send"); calls.push(params); return { messageIds: [calls.length] };
+    } });
+    await new Delivery(database, { ...config, maxMessages: 1000, maxChatMessages: 1000 }, accounts, {} as any).run();
+    assert.equal(calls.length, 3);
+    assert.equal(calls.filter(call => call.text.endsWith(consent.footer)).length, 2);
+    assert.equal(calls[2].text, "Hello &lt;world&gt;");
+    assert.equal((await enrollment(database, "1")).sent_count, 2);
+    assert.equal((await enrollment(database, "1")).message_limit, 2);
+    assert.equal((await enrollment(database, "2")).message_limit, 100);
+    await database.query("INSERT INTO users(id,telegram_id) VALUES(3,303)");
+    assert.equal((await promotionOffer(database, "3", "ru", "elonbot_test"))?.limit, 250);
+    await join(database, "3", "ru", 3);
+    await database.query("UPDATE promotion_enrollments SET sent_count=150 WHERE user_id=3");
+    assert.equal((await enrollment(database, "3")).sent_count, 150, "The former database cap of 100 must be removed");
+    await assert.rejects(database.query("UPDATE promotion_enrollments SET sent_count=251 WHERE user_id=3"));
+  } finally { await pg.close(); }
+});
+
+test("invalid promotion quotas cannot modify settings or revision", async () => {
+  const { pg, database } = await testDatabase();
+  try {
+    const settings = await promotionSettings(database);
+    for (const message_limit of [0, -1, 1.5, "30", null, undefined, 2_147_483_648]) {
+      await assert.rejects(savePromotionSettings(database, "101", { ...settings, message_limit }), { code: "INVALID_REQUEST" });
+    }
+    assert.deepEqual(await promotionSettings(database), settings);
+    assert.equal((await savePromotionSettings(database, "101", { ...settings, message_limit: 1 })).message_limit, 1);
+  } finally { await pg.close(); }
+});
+
+test("migration from fixed quotas preserves accepted signatures and counters", async () => {
+  const { pg, database } = await testDatabase();
+  try {
+    await prepare(database); await join(database);
+    await database.query("UPDATE promotion_enrollments SET sent_count=37 WHERE user_id=1");
+    await pg.exec(`ALTER TABLE promotion_enrollments DROP CONSTRAINT promotion_enrollments_count_limit_check;
+      ALTER TABLE promotion_enrollments DROP COLUMN message_limit;
+      ALTER TABLE promotion_settings DROP COLUMN message_limit;
+      ALTER TABLE promotion_enrollments ADD CONSTRAINT promotion_enrollments_sent_count_check CHECK(sent_count BETWEEN 0 AND 100);`);
+    const before = await enrollment(database, "1");
+    const sql = await readFile("migrations/012_dynamic_promotion_limit.sql", "utf8");
+    await pg.exec(sql); await pg.exec(sql);
+    assert.deepEqual(await enrollment(database, "1"), { ...before, message_limit: 100 });
+    assert.equal((await promotionSettings(database)).message_limit, 100);
+  } finally { await pg.close(); }
+});
 
 test("promotion requires explicit consent, replaces the remaining trial, and is immutable and one-time", async () => {
   const { pg, database } = await testDatabase();

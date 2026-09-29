@@ -6,9 +6,10 @@ import { encryptSession } from "../crypto";
 
 export const config: Config = {
   botToken: "123456789:test_token", databaseUrl: "postgresql://localhost/test", databaseSsl: false,
-  baseUrl: "https://example.test", webhookSecret: "test_secret_123456789", apiId: 12345,
+  baseUrl: "https://example.test", siteUrl: "https://example.test", publicBotUsername: "elonyuborishbot", publicChannelUrl: "", siteIndexable: false,
+  webhookSecret: "test_secret_123456789", apiId: 12345,
   apiHash: "a".repeat(32), encryptionKey: Buffer.alloc(32, 7), port: 8000, host: "127.0.0.1", trustedProxyIps: ["127.0.0.1", "::1"],
-  adminIds: ["101"], maxMessages: 20, maxChatMessages: 1, maxAnnouncements: 10, maxGroupsPerAnnouncement: 30,
+  adminIds: ["101"], maxMessages: 20, maxChatMessages: 1, maxAnnouncements: 10,
 };
 export function adapter(pg: PGlite | any): Queryable {
   return { async query(sql, values = []) {
@@ -33,6 +34,8 @@ export async function testDatabase() {
   await pg.exec(await readFile("migrations/009_delivery_controls.sql", "utf8"));
   await pg.exec(await readFile("migrations/010_login_security.sql", "utf8"));
   await pg.exec(await readFile("migrations/011_promotion_trial.sql", "utf8"));
+  await pg.exec(await readFile("migrations/012_dynamic_promotion_limit.sql", "utf8"));
+  await pg.exec(await readFile("migrations/013_tariff_catalog.sql", "utf8"));
   const database: Database = { ...adapter(pg), transaction: fn => pg.transaction(tx => fn(adapter(tx))) };
   return { pg, database };
 }

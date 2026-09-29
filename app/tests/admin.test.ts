@@ -37,7 +37,7 @@ test("admin HTTP requires a signed allowlisted identity for every action, serves
     assert.equal((await request("/admin-api/overview", undefined, 101, { Authorization: "" })).status, 401);
     assert.equal((await request("/admin-api/overview", undefined, 101, { Authorization: `tma ${signedInitData(101, Math.floor(Date.now() / 1000) - 3601)}` })).status, 401);
     assert.equal((await request("/admin-api/overview", undefined, 101, { Origin: "https://evil.test" })).status, 403);
-    for (const [path, payload] of [["/admin-api/overview", undefined], ["/admin-api/users/1", undefined], ["/admin-api/users/1/messages", undefined], ["/admin-api/files/announcements/1/0", undefined], ["/admin-api/users/1/tariff", { action: "activate", requestId: randomUUID() }], ["/admin-api/users/1/reply", { text: "hello", requestId: randomUUID() }], ["/admin-api/users/1/read", { throughId: "100" }]] as const) {
+    for (const [path, payload] of [["/admin-api/overview", undefined], ["/admin-api/users/1", undefined], ["/admin-api/users/1/messages", undefined], ["/admin-api/files/announcements/1/0", undefined], ["/admin-api/users/1/tariff", { action: "activate", planCode: "basic", catalogRevision: 1, requestId: randomUUID() }], ["/admin-api/users/1/reply", { text: "hello", requestId: randomUUID() }], ["/admin-api/users/1/read", { throughId: "100" }]] as const) {
       assert.equal((await request(path, payload, 202)).status, 403);
     }
     assert.equal(sends, 0); assert.equal(files, 0);
@@ -87,16 +87,16 @@ test("admin activates exactly 30 paid days for 20000 sum, extends remaining acce
     await seed(database);
     await database.query("UPDATE users SET paid_until=NULL,trial_started_at=now(),trial_ends_at=now()+interval '7 days' WHERE id=1");
     const trial = await one(database, "SELECT trial_ends_at FROM users WHERE id=1");
-    const payload = { action: "activate", note: "Paid in cash", requestId: randomUUID() };
+    const payload = { action: "activate", planCode: "basic", catalogRevision: 1, note: "Paid in cash", requestId: randomUUID() };
     const first: any = await action(payload); const retry: any = await action(payload);
     assert.equal(first.amount_sum, 20000); assert.equal(String(first.id), String(retry.id));
     assert.equal(first.paid_until.getTime() - trial.trial_ends_at.getTime(), 30 * 86400000);
     assert.equal(String(first.admin_telegram_id), "101");
-    const second: any = await action({ action: "activate", requestId: randomUUID() });
+    const second: any = await action({ action: "activate", planCode: "basic", catalogRevision: 1, requestId: randomUUID() });
     assert.equal(second.paid_until.getTime() - first.paid_until.getTime(), 30 * 86400000);
     await assert.rejects(action({ ...payload, note: "changed" }), { code: "CONFLICT" });
     await assert.rejects(action(payload, "2"), { code: "CONFLICT" });
-    await assert.rejects(action({ action: "activate", requestId: "bad" }), { code: "INVALID_REQUEST" });
+    await assert.rejects(action({ action: "activate", planCode: "basic", catalogRevision: 1, requestId: "bad" }), { code: "INVALID_REQUEST" });
     await assert.rejects(admin.handle("POST", "/admin-api/users/1/tariff", { id: 202, first_name: "Not admin" }, payload), { code: "FORBIDDEN" });
     await action({ action: "revoke", requestId: randomUUID() });
     const revoked = await one(database, "SELECT paid_until,trial_ends_at FROM users WHERE id=1");

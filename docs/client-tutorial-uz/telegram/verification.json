@@ -1,0 +1,19 @@
+{
+  "file": "elonbot-telegram-uz.mp4",
+  "seconds": 121,
+  "width": 720,
+  "height": 1280,
+  "fps": 24,
+  "frames": 2904,
+  "ui_states": 29,
+  "language": "uz",
+  "audio": false,
+  "bytes": 1774070,
+  "layout_overflow": false,
+  "style": "Telegram-inspired Android night theme; educational recreation",
+  "mini_app": "real local test screenshots",
+  "motion": "200ms cubic-bezier(.23,1,.32,1); opacity and translation; no camera zoom",
+  "full_decode": {"exit_code": 0, "frames": 2904, "seconds": 121},
+  "browser_playback": {"duration": 121, "width": 720, "height": 1280, "seekable": [0, 121], "played": true, "seek_verified_at": 53.819, "error": null},
+  "static_alternative": "steps.html"
+}

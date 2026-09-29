@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="uz">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Elonbot — video qo'llanma</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f7f8f2;color:#183e32;font:17px/1.65 system-ui,Segoe UI,sans-serif}main{max-width:1100px;margin:auto;padding:36px 24px;display:grid;grid-template-columns:minmax(260px,440px) 1fr;gap:48px;align-items:start}video{display:block;width:100%;max-height:88vh;background:#183e32;border-radius:18px;box-shadow:0 12px 36px #183e321c}h1{font-size:clamp(28px,3vw,40px);line-height:1.2;margin:14px 0}p{color:#536359}.kicker{font-size:12px;letter-spacing:2px;font-weight:700;color:#245940}.meta{font-size:14px;color:#5d6d5e}a{color:#245940}.download{display:inline-block;background:#245940;color:white;padding:12px 19px;text-decoration:none;border-radius:9px;font-weight:650;margin:10px 0}.chapters{display:grid;gap:8px;margin-top:25px}.chapters button{text-align:left;padding:12px 15px;border:1px solid #d3ddcd;background:#fff;color:#183e32;border-radius:9px;font:inherit;cursor:pointer}.chapters button:hover{background:#e9f0dc}.chapters time{display:inline-block;width:63px;color:#5d6d5e;font-size:14px}.note{font-size:14px;border-top:1px solid #d3ddcd;padding-top:18px;margin-top:23px}button:focus-visible,a:focus-visible{outline:3px solid #779b3e;outline-offset:3px}@media(max-width:730px){main{grid-template-columns:1fr;gap:25px;padding:18px}video{max-height:80vh}.info{max-width:580px}}
+</style>
+</head>
+<body><main>
+<video id="tutorial" controls playsinline preload="metadata" poster="cover.png" aria-label="Elonbotdan foydalanish — o'zbekcha o'quv videosi"><source src="elonbot-qollanma-uz.mp4" type="video/mp4">Videoni <a href="elonbot-qollanma-uz.mp4">yuklab oling</a>.</video>
+<section class="info"><div class="kicker">ELONBOT · O'ZBEKCHA</div><h1>E'lonni tayyorlashdan yuborishgacha.</h1><p>Guruhlarni tanlang, matn va rasmlarni yuboring, jadvalni belgilang. Hammasi bosqichma-bosqich.</p><p class="meta">2:01 · 9:16 · yozuvli tushuntirish · ovozsiz</p><a class="download" href="elonbot-qollanma-uz.mp4" download>MP4 videoni yuklab olish</a>
+<nav class="chapters" aria-label="Video bo'limlari">
+<button data-time="0"><time>00:00</time> Boshlash</button>
+<button data-time="13"><time>00:13</time> Boshlashdan oldin</button>
+<button data-time="18"><time>00:18</time> Guruhlarni ulash</button>
+<button data-time="33"><time>00:33</time> E'lon va matn</button>
+<button data-time="45"><time>00:45</time> Rasmlarni qo'shish</button>
+<button data-time="55"><time>00:55</time> E'lon guruhlarini tanlash</button>
+<button data-time="62"><time>01:02</time> Oraliq va soatlar</button>
+<button data-time="91"><time>01:31</time> Tekshirish va ishga tushirish</button>
+<button data-time="106"><time>01:46</time> To'xtatish va davom ettirish</button>
+</nav><p class="note">Bu o'quv namoyishi: akkaunt oldindan ulangan, guruhlar va yuborish natijalari shartli. Rasmlarni bot chatida qoldiring. Vaqtlar Toshkent bo'yicha.</p><p><a href="subtitles-uz.srt" download>Subtitrlar</a> · <a href="share-text-uz.txt">Video uchun xabar matni</a></p></section>
+</main><script>
+'use strict';
+const video=document.getElementById('tutorial');
+document.querySelectorAll('[data-time]').forEach(button=>button.addEventListener('click',()=>{video.currentTime=Number(button.dataset.time);video.play().catch(()=>{});}));
+</script></body></html>
